@@ -27,11 +27,15 @@ class MediapipeFaceDetector(private val context: Context) {
 
     // The model is stored in the assets folder
     private val modelName = "blaze_face_short_range.tflite"
+    private val confidenceThreshold = 0.7f
+    private val minimumSuppressionThreshold = 0.5f
     private val baseOptions = BaseOptions.builder().setModelAssetPath(modelName).build()
     private val faceDetectorOptions =
         FaceDetector.FaceDetectorOptions.builder()
             .setBaseOptions(baseOptions)
             .setRunningMode(RunningMode.IMAGE)
+            .setMinDetectionConfidence(confidenceThreshold)
+            .setMinSuppressionThreshold(minimumSuppressionThreshold)
             .build()
     private val faceDetector = FaceDetector.createFromOptions(context, faceDetectorOptions)
 

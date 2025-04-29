@@ -37,6 +37,7 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
     private val imageTensorProcessor =
         ImageProcessor.Builder()
             .add(ResizeOp(imgSize, imgSize, ResizeOp.ResizeMethod.BILINEAR))
+//            .add(NormalizeOp())
             .add(StandardizeOp())
             .build()
 
@@ -64,6 +65,9 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
     // Gets an face embedding using FaceNet
     suspend fun getFaceEmbedding(image: Bitmap) =
         withContext(Dispatchers.Default) {
+//            val embeddings = runFaceNet(convertBitmapToBuffer(image))[0]
+//            return@withContext l2Normalize(embeddings)  // Add L2 normalization
+
             return@withContext runFaceNet(convertBitmapToBuffer(image))[0]
         }
 
@@ -91,6 +95,27 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
             for (i in pixels.indices) {
                 pixels[i] = (pixels[i] - mean) / std
             }
+            val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
+            output.loadArray(pixels)
+            return output
+        }
+    }
+
+    // Add L2 normalization for embeddings
+    private fun l2Normalize(embeddings: FloatArray): FloatArray {
+        val norm = sqrt(embeddings.map { it * it }.sum())
+        return embeddings.map { it / norm }.toFloatArray()
+    }
+
+    class NormalizeOp : TensorOperator {
+        override fun apply(p0: TensorBuffer?): TensorBuffer {
+            val pixels = p0!!.floatArray
+
+            // InsightFace normalization: (x - 127.5) / 128.0
+            for (i in pixels.indices) {
+                pixels[i] = (pixels[i] - 127.5f) / 128.0f
+            }
+
             val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
             output.loadArray(pixels)
             return output

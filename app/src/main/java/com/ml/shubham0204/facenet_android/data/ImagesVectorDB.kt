@@ -1,5 +1,6 @@
 package com.ml.shubham0204.facenet_android.data
 
+import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import org.koin.core.annotation.Single
 
 @Single
@@ -19,11 +20,15 @@ class ImagesVectorDB {
         that are of potentially better quality than just passing in 10 for maxResultCount
         (quality/performance tradeoff).
          */
+        BatchedFileLogger.log("getNearestEmbeddingPersonName begin")
         return imagesBox
             .query(FaceImageRecord_.faceEmbedding.nearestNeighbors(embedding, 10))
             .build()
             .findWithScores()
-            .map { it.get() }
+            .map {
+                BatchedFileLogger.log("getNearestEmbeddingPersonName results: ${it.score} ${it.get().personName}")
+                it.get()
+            }
             .firstOrNull()
     }
 

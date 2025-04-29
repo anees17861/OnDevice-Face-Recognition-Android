@@ -4,6 +4,7 @@ import io.objectbox.annotation.Entity
 import io.objectbox.annotation.HnswIndex
 import io.objectbox.annotation.Id
 import io.objectbox.annotation.Index
+import io.objectbox.annotation.VectorDistanceType
 
 @Entity
 data class FaceImageRecord(
@@ -16,7 +17,7 @@ data class FaceImageRecord(
 
     // the FaceNet-512 model provides a 512-dimensional embedding
     // the FaceNet model provides a 128-dimensional embedding
-    @HnswIndex(dimensions = 512) var faceEmbedding: FloatArray = floatArrayOf()
+    @HnswIndex(dimensions = 512, distanceType = VectorDistanceType.COSINE) var faceEmbedding: FloatArray = floatArrayOf()
 )
 
 @Entity

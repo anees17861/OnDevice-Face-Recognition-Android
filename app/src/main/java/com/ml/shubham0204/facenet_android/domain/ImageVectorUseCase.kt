@@ -6,9 +6,11 @@ import android.net.Uri
 import com.ml.shubham0204.facenet_android.data.FaceImageRecord
 import com.ml.shubham0204.facenet_android.data.ImagesVectorDB
 import com.ml.shubham0204.facenet_android.data.RecognitionMetrics
+import com.ml.shubham0204.facenet_android.data.ThresholdPreferenceRepository
 import com.ml.shubham0204.facenet_android.domain.embeddings.FaceNet
 import com.ml.shubham0204.facenet_android.domain.face_detection.FaceSpoofDetector
 import com.ml.shubham0204.facenet_android.domain.face_detection.MediapipeFaceDetector
+import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.time.DurationUnit
@@ -20,7 +22,8 @@ class ImageVectorUseCase(
     private val mediapipeFaceDetector: MediapipeFaceDetector,
     private val faceSpoofDetector: FaceSpoofDetector,
     private val imagesVectorDB: ImagesVectorDB,
-    private val faceNet: FaceNet
+    private val faceNet: FaceNet,
+    private val thresholdRepo: ThresholdPreferenceRepository
 ) {
 
     data class FaceRecognitionResult(
@@ -85,7 +88,8 @@ class ImageVectorUseCase(
             val distance = cosineDistance(embedding, recognitionResult.faceEmbedding)
             // If the distance > 0.4, we recognize the person
             // else we conclude that the face does not match enough
-            if (distance > 0.4) {
+            BatchedFileLogger.log("Distance: $distance ${recognitionResult.personName}")
+            if (distance > thresholdRepo.getThreshold()) {
                 faceRecognitionResults.add(
                     FaceRecognitionResult(recognitionResult.personName, boundingBox, spoofResult)
                 )

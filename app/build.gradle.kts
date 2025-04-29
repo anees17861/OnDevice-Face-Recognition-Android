@@ -10,7 +10,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.ml.shubham0204.facenet_android"
+        applicationId = "com.ml.shubham0204.facenet_android2"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -29,6 +29,13 @@ android {
             keyAlias = System.getenv("RELEASE_KEYSTORE_ALIAS")
             keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
         }
+        getByName("debug") {
+            // Path to your debug.keystore (adjust as needed)
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -39,6 +46,9 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -114,8 +124,8 @@ dependencies {
     // Mediapipe Face Detection
     implementation(libs.tasks.vision)
 
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
+//    debugImplementation(libs.androidx.ui.tooling)
+//    debugImplementation(libs.androidx.ui.test.manifest)
 }
 
 apply(plugin = "io.objectbox")
