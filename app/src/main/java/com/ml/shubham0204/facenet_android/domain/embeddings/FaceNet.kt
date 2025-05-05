@@ -37,8 +37,8 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
     private val imageTensorProcessor =
         ImageProcessor.Builder()
             .add(ResizeOp(imgSize, imgSize, ResizeOp.ResizeMethod.BILINEAR))
-//            .add(NormalizeOp())
-            .add(StandardizeOp())
+            .add(NormalizeOp())
+//            .add(StandardizeOp())
             .build()
 
     init {
@@ -59,7 +59,7 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
                 useNNAPI = true
             }
         interpreter =
-            Interpreter(FileUtil.loadMappedFile(context, "facenet_512.tflite"), interpreterOptions)
+            Interpreter(FileUtil.loadMappedFile(context, "facenet_nit.tflite"), interpreterOptions)
     }
 
     // Gets an face embedding using FaceNet

@@ -85,11 +85,11 @@ class ImageVectorUseCase(
 
             // Calculate cosine similarity between the nearest-neighbor
             // and the query embedding
-            val distance = cosineDistance(embedding, recognitionResult.faceEmbedding)
+            val distance = euclideanDistance(embedding, recognitionResult.faceEmbedding)
             // If the distance > 0.4, we recognize the person
             // else we conclude that the face does not match enough
             BatchedFileLogger.log("Distance: $distance ${recognitionResult.personName}")
-            if (distance > thresholdRepo.getThreshold()) {
+            if (distance < thresholdRepo.getThreshold()) {
                 faceRecognitionResults.add(
                     FaceRecognitionResult(recognitionResult.personName, boundingBox, spoofResult)
                 )
@@ -126,6 +126,15 @@ class ImageVectorUseCase(
         mag1 = sqrt(mag1)
         mag2 = sqrt(mag2)
         return product / (mag1 * mag2)
+    }
+
+    private fun euclideanDistance(x1: FloatArray, x2: FloatArray): Float {
+        var distance = 0f
+        for (i in x1.indices) {
+            val diff: Float = x1[i] - x2[i]
+            distance += diff * diff
+        }
+        return sqrt(distance.toDouble()).toFloat()
     }
 
     fun removeImages(personID: Long) {
