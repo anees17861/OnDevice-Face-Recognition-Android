@@ -28,6 +28,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.Mat
+import org.opencv.core.MatOfDouble
+import org.opencv.imgproc.Imgproc
 
 @SuppressLint("ViewConstructor")
 @ExperimentalGetImage
@@ -107,6 +112,49 @@ class FaceDetectionOverlay(
         this.boundingBoxOverlay.setWillNotDraw(false)
         this.boundingBoxOverlay.setZOrderOnTop(true)
         addView(this.boundingBoxOverlay, boundingBoxOverlayParams)
+    }
+
+    private val BLUR_THRESHOLD = 100.0 // Adjust this value based on testing
+    private val MIN_IMAGE_SIZE = 200 // Minimum size for blur detection
+
+    private fun isFrameBlurry(bitmap: Bitmap): Boolean {
+        // Convert bitmap to Mat
+//        val stream = ByteArrayOutputStream()
+//        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+//        val byteArray = stream.toByteArray()
+//        val matOfByte = MatOfByte(*byteArray)
+//        val mat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_GRAYSCALE)
+
+        val mat = Mat()
+        Utils.bitmapToMat(bitmap, mat)
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY)
+
+        // Resize if image is too large
+        if (mat.width() > MIN_IMAGE_SIZE || mat.height() > MIN_IMAGE_SIZE) {
+            val scale = MIN_IMAGE_SIZE.toDouble() / mat.width().coerceAtLeast(mat.height())
+            Imgproc.resize(
+                mat,
+                mat,
+                org.opencv.core.Size(
+                    mat.width() * scale,
+                    mat.height() * scale
+                )
+            )
+        }
+
+        // Calculate Laplacian variance
+        val destination = MatOfDouble()
+        Imgproc.Laplacian(mat, destination,  org.opencv.core.CvType.CV_64F)
+        val median = MatOfDouble()
+        Core.meanStdDev(destination, median, MatOfDouble())
+        val variance = Math.pow(median.get(0, 0)[0], 2.0)
+
+        // Clean up
+        mat.release()
+        destination.release()
+        median.release()
+
+        return variance < BLUR_THRESHOLD
     }
 
     private val analyzer =

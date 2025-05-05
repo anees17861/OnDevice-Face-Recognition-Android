@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "FaceNet-Android"
 include(":app")
+include(":opencv-sdk")

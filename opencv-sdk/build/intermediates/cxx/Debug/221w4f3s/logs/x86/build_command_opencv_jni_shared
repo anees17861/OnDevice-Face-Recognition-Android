@@ -1,0 +1,4 @@
+/Volumes/Crucial_X6/Development/android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  /Volumes/Crucial_X6/Development/android/Projects/OnDevice-Face-Recognition-Android/opencv-sdk/.cxx/Debug/221w4f3s/x86 \
+  opencv_jni_shared

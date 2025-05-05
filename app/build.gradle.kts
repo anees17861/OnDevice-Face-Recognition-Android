@@ -5,6 +5,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+kotlin {
+    sourceSets.all {
+        languageSettings.optIn("kotlin.ExperimentalStdlibApi")
+        languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
+    }
+}
+
 android {
     namespace = "com.ml.shubham0204.facenet_android"
     compileSdk = 34
@@ -124,6 +131,7 @@ dependencies {
     // Mediapipe Face Detection
     implementation(libs.tasks.vision)
 
+    implementation(project(":opencv-sdk"))
 //    debugImplementation(libs.androidx.ui.tooling)
 //    debugImplementation(libs.androidx.ui.test.manifest)
 }

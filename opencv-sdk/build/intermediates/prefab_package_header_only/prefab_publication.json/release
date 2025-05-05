@@ -1,0 +1,17 @@
+{
+  "installationFolder": "/Volumes/Crucial_X6/Development/android/Projects/OnDevice-Face-Recognition-Android/opencv-sdk/build/intermediates/prefab_package/release/prefab",
+  "gradlePath": ":opencv-sdk",
+  "packageInfo": {
+    "packageName": "opencv-sdk",
+    "packageSchemaVersion": 2,
+    "packageDependencies": [],
+    "modules": [
+      {
+        "moduleName": "opencv_jni_shared",
+        "moduleHeaders": "/Volumes/Crucial_X6/Development/android/Projects/OnDevice-Face-Recognition-Android/opencv-sdk/native/jni/include",
+        "moduleExportLibraries": [],
+        "abis": []
+      }
+    ]
+  }
+}
