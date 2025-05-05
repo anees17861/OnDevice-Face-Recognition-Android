@@ -1,6 +1,7 @@
 package com.ml.shubham0204.facenet_android.util
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream

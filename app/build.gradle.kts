@@ -108,6 +108,7 @@ dependencies {
     implementation(libs.tensorflow.lite.gpu.api)
     implementation(libs.tensorflow.lite.support)
 
+    implementation(libs.play.services.mlkit.face.detection)
     // DocumentFile and ExitInterface
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.exifinterface)

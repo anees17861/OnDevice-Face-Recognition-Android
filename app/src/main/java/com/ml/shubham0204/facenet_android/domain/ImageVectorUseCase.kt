@@ -9,17 +9,17 @@ import com.ml.shubham0204.facenet_android.data.RecognitionMetrics
 import com.ml.shubham0204.facenet_android.data.ThresholdPreferenceRepository
 import com.ml.shubham0204.facenet_android.domain.embeddings.FaceNet
 import com.ml.shubham0204.facenet_android.domain.face_detection.FaceSpoofDetector
-import com.ml.shubham0204.facenet_android.domain.face_detection.MediapipeFaceDetector
+import com.ml.shubham0204.facenet_android.domain.face_detection.MLKitFaceDetector
 import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
+import org.koin.core.annotation.Single
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.time.DurationUnit
 import kotlin.time.measureTimedValue
-import org.koin.core.annotation.Single
 
 @Single
 class ImageVectorUseCase(
-    private val mediapipeFaceDetector: MediapipeFaceDetector,
+    private val mlKitFaceDetector: MLKitFaceDetector,
     private val faceSpoofDetector: FaceSpoofDetector,
     private val imagesVectorDB: ImagesVectorDB,
     private val faceNet: FaceNet,
@@ -35,7 +35,7 @@ class ImageVectorUseCase(
     // Add the person's image to the database
     suspend fun addImage(personID: Long, personName: String, imageUri: Uri): Result<Boolean> {
         // Perform face-detection and get the cropped face as a Bitmap
-        val faceDetectionResult = mediapipeFaceDetector.getCroppedFace(imageUri)
+        val faceDetectionResult = mlKitFaceDetector.getCroppedFace(imageUri)
         if (faceDetectionResult.isSuccess) {
             // Get the embedding for the cropped face, and store it
             // in the database, along with `personId` and `personName`
@@ -60,7 +60,8 @@ class ImageVectorUseCase(
     ): Pair<RecognitionMetrics?, List<FaceRecognitionResult>> {
         // Perform face-detection and get the cropped face as a Bitmap
         val (faceDetectionResult, t1) =
-            measureTimedValue { mediapipeFaceDetector.getAllCroppedFaces(frameBitmap) }
+            measureTimedValue { mlKitFaceDetector.getAllCroppedFaces(frameBitmap) }
+        BatchedFileLogger.log("Detected faces count ${faceDetectionResult.size}")
         val faceRecognitionResults = ArrayList<FaceRecognitionResult>()
         var avgT2 = 0L
         var avgT3 = 0L
