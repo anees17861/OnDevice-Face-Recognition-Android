@@ -3,8 +3,11 @@ package com.ml.shubham0204.facenet_android.domain
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
+import android.util.Log
 import com.ml.shubham0204.facenet_android.data.FaceImageRecord
+import com.ml.shubham0204.facenet_android.data.IdentityAggregatorRepository
 import com.ml.shubham0204.facenet_android.data.ImagesVectorDB
+import com.ml.shubham0204.facenet_android.data.PersonDB
 import com.ml.shubham0204.facenet_android.data.RecognitionMetrics
 import com.ml.shubham0204.facenet_android.data.ThresholdPreferenceRepository
 import com.ml.shubham0204.facenet_android.domain.embeddings.FaceNet
@@ -22,8 +25,10 @@ class ImageVectorUseCase(
     private val mlKitFaceDetector: MLKitFaceDetector,
     private val faceSpoofDetector: FaceSpoofDetector,
     private val imagesVectorDB: ImagesVectorDB,
+    private val personDB: PersonDB,
     private val faceNet: FaceNet,
-    private val thresholdRepo: ThresholdPreferenceRepository
+    private val thresholdRepo: ThresholdPreferenceRepository,
+    private val identityAggregatorRepository: IdentityAggregatorRepository
 ) {
 
     data class FaceRecognitionResult(
@@ -69,7 +74,7 @@ class ImageVectorUseCase(
 
         for (result in faceDetectionResult) {
             // Get the embedding for the cropped face (query embedding)
-            val (croppedBitmap, boundingBox) = result
+            val (croppedBitmap, boundingBox,trackingId) = result
             val (embedding, t2) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
             avgT2 += t2.toLong(DurationUnit.MILLISECONDS)
             // Perform nearest-neighbor search
@@ -91,9 +96,31 @@ class ImageVectorUseCase(
             // else we conclude that the face does not match enough
             BatchedFileLogger.log("Distance: $distance ${recognitionResult.personName}")
             if (distance < thresholdRepo.getThreshold()) {
-                faceRecognitionResults.add(
-                    FaceRecognitionResult(recognitionResult.personName, boundingBox, spoofResult)
-                )
+                val finalPersonId = identityAggregatorRepository.faceDetected(trackingId,recognitionResult.personID)
+                if (finalPersonId==-1L){
+                    faceRecognitionResults.add(
+                        FaceRecognitionResult("Recognizing", boundingBox, spoofResult)
+                    )
+                    continue
+                }
+                if (recognitionResult.personID != finalPersonId) {
+                    val person = personDB.getPerson(finalPersonId)
+                    if (person != null) {
+                        faceRecognitionResults.add(
+                            FaceRecognitionResult(person.personName, boundingBox, spoofResult)
+                        )
+                        Log.d("Recognized", "getRecognizedFrames: ${person.personName}")
+                    }
+                } else {
+                    faceRecognitionResults.add(
+                        FaceRecognitionResult(
+                            recognitionResult.personName,
+                            boundingBox,
+                            spoofResult
+                        )
+                    )
+                    Log.d("Recognized", "getRecognizedFrames: ${recognitionResult.personName}")
+                }
             } else {
                 faceRecognitionResults.add(
                     FaceRecognitionResult("Not recognized", boundingBox, spoofResult)
