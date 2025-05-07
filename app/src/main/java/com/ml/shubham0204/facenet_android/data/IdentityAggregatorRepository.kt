@@ -6,28 +6,29 @@ import androidx.collection.IntList
 import androidx.collection.MutableIntList
 import androidx.collection.MutableLongList
 import org.koin.core.annotation.Single
+import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
+
+
 
 @Single
 class IdentityAggregatorRepository() {
     private val hashMap = HashMap<String, MutableLongList>()
     fun faceDetected(tracker_id:Int,person_id:Long):Long{
-        Log.d("faceDetected", "faceDetected: This Function called")
+        BatchedFileLogger.log("IdentityAggregatorRepository, facesAggregated: Initialized")
         val list = hashMap[tracker_id.toString()]
 //        hashMap[tracker_id.toString()]
         if (list != null) {
-            if(list.size>=5){
-                Log.d("faceDetected", "faceDetected: This Function called 2")
+            list.add(person_id)
+            if(list.size>=3){
                 val findMajority = findMajority(list)
                 list.clear()
                 hashMap.remove(tracker_id.toString())
                 return findMajority
             }
-            list.add(person_id)
             hashMap[tracker_id.toString()] = list
         }
         else{
             if (hashMap.size>2){
-                Log.d("faceDetected", "faceDetected: Hash map called")
                 hashMap.remove(hashMap.keys.minOf { it })
             }
             val newList = MutableLongList()
@@ -56,12 +57,11 @@ class IdentityAggregatorRepository() {
 
             }
         }
-        if (max>3){
-            Log.d("faceDetected", "faceDetected: Max Greater than five")
+        if (max>2){
+            BatchedFileLogger.log("IdentityAggregatorRepository, facesAggregated: $max")
             return maxperson
         }
         else{
-            Log.d("faceDetected", "faceDetected: MAx Value $max")
             return -1
         }
 

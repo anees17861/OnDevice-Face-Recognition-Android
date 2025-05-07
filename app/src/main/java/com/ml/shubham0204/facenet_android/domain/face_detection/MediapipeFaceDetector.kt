@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.net.Uri
+import android.util.Log
 import androidx.core.graphics.toRect
 import androidx.exifinterface.media.ExifInterface
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -14,6 +15,7 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetector
 import com.ml.shubham0204.facenet_android.domain.AppException
 import com.ml.shubham0204.facenet_android.domain.ErrorCode
+import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +29,7 @@ class MediapipeFaceDetector(private val context: Context) {
 
     // The model is stored in the assets folder
     private val modelName = "blaze_face_short_range.tflite"
-    private val confidenceThreshold = 0.7f
+    private val confidenceThreshold = 0.9f
     private val minimumSuppressionThreshold = 0.5f
     private val baseOptions = BaseOptions.builder().setModelAssetPath(modelName).build()
     private val faceDetectorOptions =
@@ -38,6 +40,7 @@ class MediapipeFaceDetector(private val context: Context) {
             .setMinSuppressionThreshold(minimumSuppressionThreshold)
             .build()
     private val faceDetector = FaceDetector.createFromOptions(context, faceDetectorOptions)
+    private val faceTracker = FaceTracker()
 
     suspend fun getCroppedFace(imageUri: Uri): Result<Bitmap> =
         withContext(Dispatchers.IO) {
@@ -105,24 +108,53 @@ class MediapipeFaceDetector(private val context: Context) {
     // Detects multiple faces from the `frameBitmap`
     // and returns pairs of (croppedFace , boundingBoxRect)
     // Used by ImageVectorUseCase.kt
-    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Pair<Bitmap, Rect>> =
+//    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Pair<Bitmap, Rect>> =
+//        withContext(Dispatchers.IO) {
+//
+//            return@withContext faceDetector
+//                .detect(BitmapImageBuilder(frameBitmap).build())
+//                .detections()
+//                .filter { validateRect(frameBitmap, it.boundingBox().toRect()) }
+//                .map {
+//                    detection ->
+//                    detection.boundingBox().toRect() }
+//                .map { rect ->
+//                    val croppedBitmap =
+//                        Bitmap.createBitmap(
+//                            frameBitmap,
+//                            rect.left,
+//                            rect.top,
+//                            rect.width(),
+//                            rect.height()
+//                        )
+//                    Pair(croppedBitmap, rect)
+//                }
+//        }
+
+    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Triple<Bitmap, Rect,Int>> =
         withContext(Dispatchers.IO) {
-            return@withContext faceDetector
+            // Get face detections
+            val detectedFaces = faceDetector
                 .detect(BitmapImageBuilder(frameBitmap).build())
                 .detections()
-                .filter { validateRect(frameBitmap, it.boundingBox().toRect()) }
-                .map { detection -> detection.boundingBox().toRect() }
-                .map { rect ->
-                    val croppedBitmap =
-                        Bitmap.createBitmap(
-                            frameBitmap,
-                            rect.left,
-                            rect.top,
-                            rect.width(),
-                            rect.height()
-                        )
-                    Pair(croppedBitmap, rect)
-                }
+                .map { it.boundingBox().toRect() }
+                .filter { validateRect(frameBitmap, it) }
+
+            // Update tracks
+
+            val trackedFaces = faceTracker.updateTracks(detectedFaces)
+            BatchedFileLogger.log("Tracked Faces and Bounding Boxes in a frame: $trackedFaces")
+            // Return cropped faces with their tracking IDs
+            return@withContext trackedFaces.map { (id, rect) ->
+                val croppedBitmap = Bitmap.createBitmap(
+                    frameBitmap,
+                    rect.left,
+                    rect.top,
+                    rect.width(),
+                    rect.height()
+                )
+                Triple(croppedBitmap, rect,id)
+            }
         }
 
     // DEBUG: For testing purpose, saves the Bitmap to the app's private storage

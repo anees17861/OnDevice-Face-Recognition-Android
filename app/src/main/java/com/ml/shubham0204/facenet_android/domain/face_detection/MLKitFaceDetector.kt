@@ -41,7 +41,7 @@ class MLKitFaceDetector(private val context: Context) {
     var highAccuracyOpts: FaceDetectorOptions =
         FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
             .enableTracking()
             .build()
@@ -103,8 +103,8 @@ class MLKitFaceDetector(private val context: Context) {
                             rect.width(),
                             rect.height()
                         )
-                    val aligned_face = alignFace(imageBitmap,faces[0],160)
-                    return@withContext Result.success(aligned_face)
+//                    val aligned_face = alignFace(imageBitmap,faces[0],160)
+                    return@withContext Result.success(imageBitmap)
                 } else {
                     return@withContext Result.failure<Bitmap>(
                         AppException(ErrorCode.FACE_DETECTOR_FAILURE)
@@ -117,20 +117,20 @@ class MLKitFaceDetector(private val context: Context) {
 
     private fun alignFace(bitmap: Bitmap, face: Face, targetSize: Int): Bitmap {
         // Get face landmarks if available
-        val leftEye = face.getLandmark(FaceLandmark.LEFT_EAR)?.position
-        val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
+//        val leftEye = face.getLandmark(FaceLandmark.LEFT_EAR)?.position
+//        val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
 
         // Calculate rotation angle
-        val rotationDegrees = if (leftEye != null && rightEye != null) {
-            val deltaY = rightEye.y - leftEye.y
-            val deltaX = rightEye.x - leftEye.x
-            val radians = atan2(deltaY, deltaX)
-            Math.toDegrees(radians.toDouble()).toFloat()
-        } else {
-            // Use face rotation if landmarks not available
-            face.headEulerAngleZ
-        }
-
+//        val rotationDegrees = if (leftEye != null && rightEye != null) {
+//            val deltaY = rightEye.y - leftEye.y
+//            val deltaX = rightEye.x - leftEye.x
+//            val radians = atan2(deltaY, deltaX)
+//            Math.toDegrees(radians.toDouble()).toFloat()
+//        } else {
+//            // Use face rotation if landmarks not available
+//            face.headEulerAngleZ
+//        }
+        val rotationDegrees = face.headEulerAngleZ
         // Calculate the center of the face
         val centerX = face.boundingBox.exactCenterX()
         val centerY = face.boundingBox.exactCenterY()
@@ -169,7 +169,7 @@ class MLKitFaceDetector(private val context: Context) {
         )
 
         // Scale to target size
-        croppedBitmap = croppedBitmap.scale(targetSize, targetSize)
+//        croppedBitmap = croppedBitmap.scale(targetSize, targetSize)
 
         // Clean up temporary bitmaps
         if (rotatedBitmap != bitmap && rotatedBitmap != croppedBitmap) {
@@ -194,10 +194,12 @@ class MLKitFaceDetector(private val context: Context) {
                     val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
                     val rotX = detection.headEulerAngleX // Head is rotated to the right rotY degrees
 //                        val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
-                    }
-                    val aligned_face = alignFace(frameBitmap,detection,160)
-                    Triple(aligned_face, detection.boundingBox,id!!)
+//                    val aligned_face = alignFace(frameBitmap,detection,160)
+                    Triple(frameBitmap, detection.boundingBox,id!!)
                 }
+
+        }
+
 //                .map { rect ->
 //                    val croppedBitmap =
 //                        Bitmap.createBitmap(
@@ -209,7 +211,7 @@ class MLKitFaceDetector(private val context: Context) {
 //                        )
 //                    Pair(croppedBitmap, rect)
 //                }
-        }
+//        }
 
     // DEBUG: For testing purpose, saves the Bitmap to the app's private storage
     fun saveBitmap(context: Context, image: Bitmap, name: String) {

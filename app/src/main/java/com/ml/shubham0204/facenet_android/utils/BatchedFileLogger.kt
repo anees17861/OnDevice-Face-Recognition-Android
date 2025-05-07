@@ -34,6 +34,7 @@ object BatchedFileLogger {
     fun log(message: String) {
         val timestamp = dateFormat.format(Date())
         val logMessage = "$timestamp: $message\n"
+        Log.d("BatchedFileLogger", logMessage)
         synchronized(bufferLock) {
             logBuffer.add(logMessage)
             if (logBuffer.size >= BATCH_SIZE) {
