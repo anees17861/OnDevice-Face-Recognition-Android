@@ -91,11 +91,6 @@ class ImageVectorUseCase(
                 continue
             }
 
-            val spoofResult = faceSpoofDetector.detectSpoof(frameBitmap, boundingBox)
-            BatchedFileLogger.log("Time Taken for spoof detection: ${spoofResult.timeMillis} MILLISECONDS")
-//            BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} ")
-            avgT4 += spoofResult.timeMillis
-
             // Calculate cosine similarity between the nearest-neighbor
             // and the query embedding
             val (distance,tDistance) = measureTimedValue{ euclideanDistance(embedding, recognitionResult.faceEmbedding) }
@@ -106,11 +101,13 @@ class ImageVectorUseCase(
             if (distance < thresholdRepo.getThreshold()) {
                 val (finalPersonId,tAggregator) = measureTimedValue { identityAggregatorRepository.faceDetected(trackingId,recognitionResult.personID) }
                 BatchedFileLogger.log("Time Taken for Aggregator: ${tAggregator.toLong(DurationUnit.MILLISECONDS)}")
+                val spoofResult = faceSpoofDetector.detectSpoof(frameBitmap, boundingBox)
+                BatchedFileLogger.log("Time Taken for spoof detection: ${spoofResult.timeMillis} MILLISECONDS")
+                avgT4 += spoofResult.timeMillis
                 if (finalPersonId==-1L){
                     faceRecognitionResults.add(
                         FaceRecognitionResult("Recognizing", boundingBox, spoofResult)
                     )
-                    BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} Recognizing ")
                     continue
                 }
                 if (recognitionResult.personID != finalPersonId) {
@@ -136,9 +133,9 @@ class ImageVectorUseCase(
                 }
             } else {
                 faceRecognitionResults.add(
-                    FaceRecognitionResult("Not recognized", boundingBox, spoofResult)
+                    FaceRecognitionResult("Not recognized", boundingBox, null)
                 )
-                BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} Not recognized")
+//                BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} Not recognized")
             }
         }
         val metrics =
