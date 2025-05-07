@@ -175,7 +175,8 @@ class FaceDetectionOverlay(
                         personName = ""
                     }
                     if (spoofResult != null && spoofResult.isSpoof) {
-                        personName = "$personName (Spoof: ${spoofResult.score})"
+//                        personName = "$personName (Spoof: ${spoofResult.score})"
+                          personName = "Spoof"
                     }
                     boundingBoxTransform.mapRect(box)
                     predictions.add(Prediction(box, personName))
@@ -195,11 +196,36 @@ class FaceDetectionOverlay(
     inner class BoundingBoxOverlay(context: Context) :
         SurfaceView(context), SurfaceHolder.Callback {
 
-        private val boxPaint =
+//        private val boxPaint =
+//            Paint().apply {
+//                color = Color.parseColor("#4D90caf9")
+//                style = Paint.Style.FILL
+//            }
+//        private val textPaint =
+//            Paint().apply {
+//                strokeWidth = 2.0f
+//                textSize = 36f
+//                color = Color.WHITE
+//            }
+
+        private val normalBoxPaint =
             Paint().apply {
                 color = Color.parseColor("#4D90caf9")
                 style = Paint.Style.FILL
             }
+
+        private val spoofBoxPaint =
+            Paint().apply {
+                color = Color.parseColor("#4DFF0000") // Semi-transparent red
+                style = Paint.Style.FILL
+            }
+
+        private val recognizedBoxPaint =
+            Paint().apply {
+                color = Color.parseColor("#4D00FF00") // Semi-transparent green
+                style = Paint.Style.FILL
+            }
+
         private val textPaint =
             Paint().apply {
                 strokeWidth = 2.0f
@@ -215,8 +241,21 @@ class FaceDetectionOverlay(
 
         override fun onDraw(canvas: Canvas) {
             predictions.forEach {
-                canvas.drawRoundRect(it.bbox, 16f, 16f, boxPaint)
+//                canvas.drawRoundRect(it.bbox, 16f, 16f, boxPaint)
+//                canvas.drawText(it.label, it.bbox.centerX(), it.bbox.centerY(), textPaint)
+                val isSpoof = it.label.contains("Spoof")
+                val isRecognizing = it.label.contains("Recognizing")
+                val isNoTRecognized = it.label.contains("Not recognized")
+//                val paint = if (isSpoof) spoofBoxPaint else normalBoxPaint
+                val paint = when {
+                    isSpoof-> spoofBoxPaint
+                    it.label == "Not recognized" || it.label == "Recognizing" -> normalBoxPaint
+                    else -> recognizedBoxPaint // Has a name = recognized face
+                }
+
+                canvas.drawRoundRect(it.bbox, 16f, 16f, paint)
                 canvas.drawText(it.label, it.bbox.centerX(), it.bbox.centerY(), textPaint)
+
             }
         }
     }
