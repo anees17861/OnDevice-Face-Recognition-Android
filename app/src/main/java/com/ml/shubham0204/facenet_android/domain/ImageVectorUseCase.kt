@@ -101,15 +101,15 @@ class ImageVectorUseCase(
             if (distance < thresholdRepo.getThreshold()) {
                 val (finalPersonId,tAggregator) = measureTimedValue { identityAggregatorRepository.faceDetected(trackingId,recognitionResult.personID) }
                 BatchedFileLogger.log("Time Taken for Aggregator: ${tAggregator.toLong(DurationUnit.MILLISECONDS)}")
-                val spoofResult = faceSpoofDetector.detectSpoof(frameBitmap, boundingBox)
-                BatchedFileLogger.log("Time Taken for spoof detection: ${spoofResult.timeMillis} MILLISECONDS")
-                avgT4 += spoofResult.timeMillis
                 if (finalPersonId==-1L){
                     faceRecognitionResults.add(
-                        FaceRecognitionResult("Recognizing", boundingBox, spoofResult)
+                        FaceRecognitionResult("Recognizing", boundingBox, null)
                     )
                     continue
                 }
+                val spoofResult = faceSpoofDetector.detectSpoof(frameBitmap, boundingBox)
+                BatchedFileLogger.log("Time Taken for spoof detection: ${spoofResult.timeMillis} MILLISECONDS")
+                avgT4 += spoofResult.timeMillis
                 if (recognitionResult.personID != finalPersonId) {
                     val person = personDB.getPerson(finalPersonId)
                     if (person != null) {
@@ -135,6 +135,8 @@ class ImageVectorUseCase(
                 faceRecognitionResults.add(
                     FaceRecognitionResult("Not recognized", boundingBox, null)
                 )
+                identityAggregatorRepository.clearFace(trackingId)
+
 //                BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} Not recognized")
             }
         }
