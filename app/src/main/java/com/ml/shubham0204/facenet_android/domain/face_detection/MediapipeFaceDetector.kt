@@ -5,11 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
+import android.graphics.RectF
 import android.net.Uri
 import android.util.Log
 import androidx.core.graphics.toRect
 import androidx.exifinterface.media.ExifInterface
 import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetector
@@ -21,6 +23,7 @@ import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
+import kotlin.math.atan2
 
 // Utility class for interacting with Mediapipe's Face Detector
 // See https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector/android
@@ -78,6 +81,7 @@ class MediapipeFaceDetector(private val context: Context) {
 
             // We need exactly one face in the image, in other cases, return the
             // necessary errors
+//            saveBitmap(context,imageBitmap,"input_img")
             val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()
             if (faces.size > 1) {
                 return@withContext Result.failure<Bitmap>(AppException(ErrorCode.MULTIPLE_FACES))
@@ -96,6 +100,8 @@ class MediapipeFaceDetector(private val context: Context) {
                             rect.width(),
                             rect.height()
                         )
+                    val alignedFace = alignFace(imageBitmap, faces[0])
+//                    saveBitmap(context,alignedFace,"test_input" )
                     return@withContext Result.success(croppedBitmap)
                 } else {
                     return@withContext Result.failure<Bitmap>(
@@ -137,15 +143,19 @@ class MediapipeFaceDetector(private val context: Context) {
             val detectedFaces = faceDetector
                 .detect(BitmapImageBuilder(frameBitmap).build())
                 .detections()
-                .map { it.boundingBox().toRect() }
-                .filter { validateRect(frameBitmap, it) }
+//                .map { it.boundingBox().toRect() }
+                .filter { validateRect(frameBitmap, it.boundingBox().toRect()) }
 
             // Update tracks
-
             val trackedFaces = faceTracker.updateTracks(detectedFaces)
+
+
 //            BatchedFileLogger.log("Tracked Faces and Bounding Boxes in a frame: $trackedFaces")
             // Return cropped faces with their tracking IDs
-            return@withContext trackedFaces.map { (id, rect) ->
+            return@withContext trackedFaces.map { (id, detection) ->
+                val rect = detection.boundingBox().toRect()
+                val alignedFace = alignFace(frameBitmap, detection)
+//                saveBitmap(context,alignedFace, id.toString())
                 val croppedBitmap = Bitmap.createBitmap(
                     frameBitmap,
                     rect.left,
@@ -153,6 +163,7 @@ class MediapipeFaceDetector(private val context: Context) {
                     rect.width(),
                     rect.height()
                 )
+
                 Triple(croppedBitmap, rect,id)
             }
         }
@@ -176,5 +187,68 @@ class MediapipeFaceDetector(private val context: Context) {
             boundingBox.top >= 0 &&
             (boundingBox.left + boundingBox.width()) < cameraFrameBitmap.width &&
             (boundingBox.top + boundingBox.height()) < cameraFrameBitmap.height
+    }
+
+    private fun alignFace(
+        bitmap: Bitmap,
+        detection: Detection
+    ): Bitmap {
+        // 1) Get normalized eye keypoints
+        if (!detection.keypoints().isPresent and (detection.keypoints().get().size < 2)) {
+            return bitmap
+        }
+        val leftEye = detection.keypoints().get()[0]
+        val rightEye = detection.keypoints().get()[1]
+        if (rightEye == null || leftEye == null) return bitmap
+
+        // 2. Calculate rotation angle from normalized coordinates
+        val dx = (rightEye.x() - leftEye.x())* bitmap.width
+        val dy = (rightEye.y() - leftEye.y())* bitmap.height
+        Log.d("dxdy", "dx: $dx, dy: $dy $rightEye $leftEye")
+        val angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+
+        // 3. Get face bounding box with margin
+        val boundingBox = detection.boundingBox()
+
+        // 4. Convert normalized coordinates to pixel values
+//        val margin = 0.1f // 10% margin
+        val margin = minOf(boundingBox.width(), boundingBox.height()) * 0.2f
+        val pixelLeft = ((boundingBox.left - margin)).toInt().coerceAtLeast(0)
+        val pixelTop = ((boundingBox.top - margin)).toInt().coerceAtLeast(0)
+        val pixelWidth = (boundingBox.width() + margin).toInt().coerceAtMost(bitmap.width)
+        val pixelHeight = (boundingBox.height() + margin).toInt().coerceAtMost(bitmap.height)
+        Log.d("PixelValues", "Left: $pixelLeft, Top: $pixelTop, Width: $pixelWidth, Height: $pixelHeight ")
+        // 5. Create tight crop around face
+
+        val faceCrop =
+//            try {
+            Bitmap.createBitmap(
+                bitmap,
+                pixelLeft,
+                pixelTop,
+                pixelWidth,
+                pixelHeight
+            )
+//        } catch (e: IllegalArgumentException) {
+//            return bitmap
+//        }
+
+        // 6. Calculate rotation pivot point (eye midpoint relative to crop)
+        val eyeMidpointX = ((leftEye.x() + rightEye.x()) / 2f) * bitmap.width
+        val eyeMidpointY = ((leftEye.y() + rightEye.y()) / 2f) * bitmap.height
+        Log.d("eyeMidpointValues", "X: $eyeMidpointX, Y: $eyeMidpointY")
+        Log.d("Angle", "Angle: $angle")
+//        Log.d("bitmap", "Width: ${bitmap.width}, Height: ${bitmap.height}")
+
+        // 7. Create rotation matrix around eye midpoint
+        val matrix = Matrix().apply {
+            postRotate(-angle, faceCrop.width / 2f, faceCrop.height / 2f)
+        }
+        val rotatedBitmap =
+            Bitmap.createBitmap(faceCrop, 0, 0, faceCrop.width, faceCrop.height, matrix, true)
+
+        return rotatedBitmap
+
+
     }
 }

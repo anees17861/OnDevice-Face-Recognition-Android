@@ -1,5 +1,7 @@
 package com.ml.shubham0204.facenet_android.domain.face_detection
 import android.graphics.Rect
+import androidx.core.graphics.toRect
+import com.google.mediapipe.tasks.components.containers.Detection
 import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import org.koin.core.annotation.Single
 import kotlin.math.max
@@ -15,11 +17,12 @@ class FaceTracker {
     data class TrackedFace(
         val trackId: Int,
         var boundingBox: Rect,
+        var detection: Detection,
         var lostFrames: Int = 0,
         var age: Int = 0
     )
 
-    fun updateTracks(detectedFaces: List<Rect>): List<Pair<Int, Rect>> {
+    fun updateTracks(detectedFaces: List<Detection>): List<Pair<Int, Detection>> {
         val assignedTracks = mutableSetOf<Int>()
         val assignedDetections = mutableSetOf<Int>()
         val matches = mutableListOf<Pair<Int, Int>>() // (trackIdx, detectionIdx)
@@ -27,7 +30,7 @@ class FaceTracker {
         // Calculate IoU between all tracked faces and new detections
         for ((trackId, trackedFace) in trackedFaces) {
             for ((detectionIdx, detection) in detectedFaces.withIndex()) {
-                val iou = calculateIoU(trackedFace.boundingBox, detection)
+                val iou = calculateIoU(trackedFace.boundingBox, detection.boundingBox().toRect())
                 if (iou > iouThreshold) {
                     matches.add(Pair(trackId, detectionIdx))
                 }
@@ -36,7 +39,7 @@ class FaceTracker {
 
         // Sort matches by IoU score (highest first)
         matches.sortByDescending { (trackId, detectionIdx) ->
-            calculateIoU(trackedFaces[trackId]!!.boundingBox, detectedFaces[detectionIdx])
+            calculateIoU(trackedFaces[trackId]!!.boundingBox, detectedFaces[detectionIdx].boundingBox().toRect())
         }
 
         // Update matched tracks
@@ -46,7 +49,8 @@ class FaceTracker {
                 assignedDetections.add(detectionIdx)
 
                 trackedFaces[trackId]?.apply {
-                    boundingBox = detectedFaces[detectionIdx]
+                    boundingBox = detectedFaces[detectionIdx].boundingBox().toRect()
+                    detection = detectedFaces[detectionIdx]
                     lostFrames = 0
                     age++
                 }
@@ -58,7 +62,7 @@ class FaceTracker {
             if (idx !in assignedDetections) {
                 BatchedFileLogger.log("New Face Added for tracking")
                 val newTrackId = nextTrackId++
-                trackedFaces[newTrackId] = TrackedFace(newTrackId, detection)
+                trackedFaces[newTrackId] = TrackedFace(newTrackId, detection.boundingBox().toRect(),detection)
             }
         }
 
@@ -81,7 +85,7 @@ class FaceTracker {
         return trackedFaces
             .filter { tracksToShadow.contains(it.key).not() }
             .map { (trackId, track) ->
-            Pair(trackId, track.boundingBox)
+            Pair(trackId, track.detection)
         }
     }
 
