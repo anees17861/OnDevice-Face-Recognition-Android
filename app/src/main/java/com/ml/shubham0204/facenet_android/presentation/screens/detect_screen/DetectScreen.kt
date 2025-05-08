@@ -27,10 +27,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +55,7 @@ import com.ml.shubham0204.facenet_android.presentation.components.DelayedVisibil
 import com.ml.shubham0204.facenet_android.presentation.components.FaceDetectionOverlay
 import com.ml.shubham0204.facenet_android.presentation.components.createAlertDialog
 import com.ml.shubham0204.facenet_android.presentation.theme.FaceNetAndroidTheme
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 private val cameraPermissionStatus = mutableStateOf(false)
@@ -60,9 +65,25 @@ private lateinit var cameraPermissionLauncher: ManagedActivityResultLauncher<Str
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetectScreen(onOpenFaceListClick: (() -> Unit)) {
+    val viewModel: DetectScreenViewModel = koinViewModel()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val recognizedFace = remember { viewModel.recognizedFace }
+    LaunchedEffect(recognizedFace.value) {
+        recognizedFace.value?.let { name ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = "Recognized: $name",
+                duration = SnackbarDuration.Short
+            )
+//            delay(2000) // Clear after 2 seconds
+            viewModel.clearRecognition()
+        }
+    }
     FaceNetAndroidTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(),
@@ -97,14 +118,14 @@ fun DetectScreen(onOpenFaceListClick: (() -> Unit)) {
                 )
             }
         ) { innerPadding ->
-            Column(modifier = Modifier.padding(innerPadding)) { ScreenUI() }
+            Column(modifier = Modifier.padding(innerPadding)) { ScreenUI(viewModel) }
         }
     }
 }
 
 @Composable
-private fun ScreenUI() {
-    val viewModel: DetectScreenViewModel = koinViewModel()
+private fun ScreenUI(viewModel: DetectScreenViewModel) {
+
     Box {
         Camera(viewModel)
         DelayedVisibility(viewModel.getNumPeople() > 0) {
@@ -147,6 +168,7 @@ private fun ScreenUI() {
         }
         AppAlertDialog()
     }
+
 }
 
 @OptIn(ExperimentalGetImage::class)
