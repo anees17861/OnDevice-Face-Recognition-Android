@@ -143,7 +143,7 @@ class MediapipeFaceDetector(private val context: Context) {
             // Update tracks
 
             val trackedFaces = faceTracker.updateTracks(detectedFaces)
-            BatchedFileLogger.log("Tracked Faces and Bounding Boxes in a frame: $trackedFaces")
+//            BatchedFileLogger.log("Tracked Faces and Bounding Boxes in a frame: $trackedFaces")
             // Return cropped faces with their tracking IDs
             return@withContext trackedFaces.map { (id, rect) ->
                 val croppedBitmap = Bitmap.createBitmap(
