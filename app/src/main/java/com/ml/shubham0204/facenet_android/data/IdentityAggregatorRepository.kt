@@ -67,4 +67,8 @@ class IdentityAggregatorRepository() {
 
 
     }
+    fun clearFace(tracker_id: Int){
+        hashMap.remove(tracker_id.toString())
+
+    }
 }
