@@ -175,8 +175,12 @@ class FaceDetectionOverlay(
                         personName = ""
                     }
                     if (spoofResult != null && spoofResult.isSpoof) {
-//                        personName = "$personName (Spoof: ${spoofResult.score})"
+                        personName = "$personName (Spoof: ${spoofResult.score})"
                           personName = "Spoof"
+                    }else if (personName.isNotEmpty() && personName != "Not recognized" && personName != "Recognizing") {
+//                        personName == "Not recognized" || personName == "Recognizing"
+                        // Trigger recognition event when a face is recognized
+                        viewModel.showRecognition(name)
                     }
                     boundingBoxTransform.mapRect(box)
                     predictions.add(Prediction(box, personName))
