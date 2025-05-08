@@ -14,6 +14,15 @@ class DetectScreenViewModel(
 ) : ViewModel() {
 
     val faceDetectionMetricsState = mutableStateOf<RecognitionMetrics?>(null)
+    val recognizedFace = mutableStateOf<String?>(null)
 
     fun getNumPeople(): Long = personUseCase.getCount()
+
+    fun showRecognition(name: String) {
+        recognizedFace.value = name
+    }
+
+    fun clearRecognition() {
+        recognizedFace.value = null
+    }
 }
