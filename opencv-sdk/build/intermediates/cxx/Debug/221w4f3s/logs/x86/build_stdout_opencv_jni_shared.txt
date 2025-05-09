@@ -1,0 +1,2 @@
+ninja: Entering directory `/Volumes/Crucial_X6/Development/android/Projects/OnDevice-Face-Recognition-Android/opencv-sdk/.cxx/Debug/221w4f3s/x86'
+ninja: no work to do.
