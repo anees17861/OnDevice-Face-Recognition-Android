@@ -1,2 +1,0 @@
-ninja: Entering directory `/Volumes/Crucial_X6/Development/android/Projects/OnDevice-Face-Recognition-Android/opencv-sdk/.cxx/Debug/221w4f3s/armeabi-v7a'
-ninja: no work to do.
