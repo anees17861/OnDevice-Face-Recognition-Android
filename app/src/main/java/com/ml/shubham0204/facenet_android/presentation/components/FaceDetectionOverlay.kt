@@ -222,8 +222,8 @@ class FaceDetectionOverlay(
                     if (viewModel.getNumPeople().toInt() == 0) {
                         personName = ""
                     }
-                    if (spoofResult != null && spoofResult.isSpoof) {
-                        personName = "$personName (Spoof: ${spoofResult.score})"
+                    if (spoofResult != null && (spoofResult.isSpoof || spoofResult.score<0.80)) {
+//                        personName = "$personName (Spoof: ${spoofResult.score})"
                           personName = "Spoof"
                     }else if (personName.isNotEmpty() && personName != "Not recognized" && personName != "Recognizing") {
 //                        personName == "Not recognized" || personName == "Recognizing"
