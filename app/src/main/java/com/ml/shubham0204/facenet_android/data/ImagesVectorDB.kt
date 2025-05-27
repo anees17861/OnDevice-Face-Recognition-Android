@@ -1,7 +1,9 @@
 package com.ml.shubham0204.facenet_android.data
 
+import android.util.Log
 import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import org.koin.core.annotation.Single
+import kotlin.math.sqrt
 
 @Single
 class ImagesVectorDB {
@@ -21,6 +23,18 @@ class ImagesVectorDB {
         (quality/performance tradeoff).
          */
         BatchedFileLogger.log("getNearestEmbeddingPersonName begin")
+//        val topMatch = imagesBox
+//            .query(FaceImageRecord_.faceEmbedding.nearestNeighbors(embedding, 5))
+//            .build()
+//            .findWithScores()
+//            .maxByOrNull {
+//                it.score
+//                Log.d("getNearestEmbeddingPersonName", "score: ${it.score} ${it.get().personName}")
+//            }  // highest cosine similarity (since vectors are normalized)
+//            ?.get()  // extract the actual FaceImageRecord, or null if none
+//            BatchedFileLogger.log("getNearestEmbeddingPersonName results: ${it.score} ${it.get().personName}")
+
+
         return imagesBox
             .query(FaceImageRecord_.faceEmbedding.nearestNeighbors(embedding, 10))
             .build()

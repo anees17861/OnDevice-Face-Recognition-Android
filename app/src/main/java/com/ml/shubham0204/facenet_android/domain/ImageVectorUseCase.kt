@@ -20,15 +20,20 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.time.DurationUnit
 import kotlin.time.measureTimedValue
+//import com.ml.shubham0204.facenet_android.domain.embeddings.InsightFaceBuffaloLarge
+//import com.ml.shubham0204.facenet_android.domain.embeddings.InsightFaceEmbeddingsExtractor
 
 @Single
 class ImageVectorUseCase(
     private val mlKitFaceDetector: MLKitFaceDetector,
-    private val mediapipeFaceDetector: MediapipeFaceDetector,
+//    private val mediapipeFaceDetector: MediapipeFaceDetector,
     private val faceSpoofDetector: FaceSpoofDetector,
     private val imagesVectorDB: ImagesVectorDB,
     private val personDB: PersonDB,
     private val faceNet: FaceNet,
+//    private val insightFaceBuffaloLarge: InsightFaceBuffaloLarge,
+//    private  val insightFaceEmbeddingsExtractor: InsightFaceEmbeddingsExtractor,
+
     private val thresholdRepo: ThresholdPreferenceRepository,
     private val identityAggregatorRepository: IdentityAggregatorRepository
 ) {
@@ -38,24 +43,37 @@ class ImageVectorUseCase(
         val boundingBox: Rect,
         val spoofResult: FaceSpoofDetector.FaceSpoofResult? = null
     )
-
+    fun l2Norm(v: FloatArray): Double {
+        var sum = 0.0
+        for (x in v) sum += x*x
+        return sqrt(sum)
+    }
     // Add the person's image to the database
     suspend fun addImage(personID: Long, personName: String, imageUri: Uri): Result<Boolean> {
         // Perform face-detection and get the cropped face as a Bitmap
-        val faceDetectionResult = mediapipeFaceDetector.getCroppedFace(imageUri)
+//        val faceDetectionResult = mediapipeFaceDetector.getCroppedFace(imageUri)
+        val faceDetectionResult = mlKitFaceDetector.getCroppedFace(imageUri)
         if (faceDetectionResult.isSuccess) {
             // Get the embedding for the cropped face, and store it
             // in the database, along with `personId` and `personName`
+            Log.d("ImageVectorUseCase", "Adding image for person: $personName")
             val embedding = faceNet.getFaceEmbedding(faceDetectionResult.getOrNull()!!)
+//            insightFaceEmbeddingsExtractor.isReady()
+//            val embedding = insightFaceEmbeddingsExtractor.extractEmbedding(faceDetectionResult.getOrNull()!!)
+//            insightFaceBuffaloLarge.initialize()
+//            val embedding = insightFaceBuffaloLarge.extractEmbedding(faceDetectionResult.getOrNull()!!)
+//            insightFaceBuffaloLarge.cleanup()
+//            Log.d("ImageVectorUseCase", "GOT THE EMBEDDING")
             imagesVectorDB.addFaceImageRecord(
                 FaceImageRecord(
                     personID = personID,
                     personName = personName,
-                    faceEmbedding = embedding
+                    faceEmbedding = embedding!!
                 )
             )
             return Result.success(true)
         } else {
+            Log.e("addImage",faceDetectionResult.exceptionOrNull().toString())
             return Result.failure(faceDetectionResult.exceptionOrNull()!!)
         }
     }
@@ -66,8 +84,10 @@ class ImageVectorUseCase(
         frameBitmap: Bitmap
     ): Pair<RecognitionMetrics?, List<FaceRecognitionResult>> {
         // Perform face-detection and get the cropped face as a Bitmap
+//        val (faceDetectionResult, t1) =
+//            measureTimedValue { mediapipeFaceDetector.getAllCroppedFaces(frameBitmap) }
         val (faceDetectionResult, t1) =
-            measureTimedValue { mediapipeFaceDetector.getAllCroppedFaces(frameBitmap) }
+            measureTimedValue { mlKitFaceDetector.getAllCroppedFaces(frameBitmap) }
         BatchedFileLogger.log("Time Taken for Face Detection: ${t1.toLong(DurationUnit.MILLISECONDS)} MILLISECONDS")
         val faceRecognitionResults = ArrayList<FaceRecognitionResult>()
         var avgT2 = 0L
@@ -78,11 +98,30 @@ class ImageVectorUseCase(
             // Get the embedding for the cropped face (query embedding)
             val (croppedBitmap, boundingBox,trackingId) = result
             val (embedding, t2) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
+//            insightFaceEmbeddingsExtractor.isReady()
+//            val (embedding, t2) = measureTimedValue { insightFaceEmbeddingsExtractor.extractEmbedding(croppedBitmap)}
+
+//            insightFaceBuffaloLarge.initialize()
+                // Extract embedding from cropped face
+//            val embedding = insightFaceBuffaloLarge.extractEmbedding(croppedBitmap)
+//            val (embedding, t2) = measureTimedValue { insightFaceBuffaloLarge.extractEmbedding(croppedBitmap) }
+//            Log.d("ImageVectorUseCase", embedding.toString())
+            // Compare with another embedding
+//            val similarity = insightFaceBuffaloLarge.cosineSimilarity(embedding1, embedding2)
+
+            // Clean up when done
+//            insightFaceBuffaloLarge.cleanup()
+//            val (embedding, t2) = measureTimedValue { insightFaceBuffaloLarge.extractEmbedding(croppedBitmap) }
+
             BatchedFileLogger.log("Time Taken for embedding: ${t2.toLong(DurationUnit.MILLISECONDS)} MILLISECONDS")
             avgT2 += t2.toLong(DurationUnit.MILLISECONDS)
             // Perform nearest-neighbor search
             val (recognitionResult, t3) =
-                measureTimedValue { imagesVectorDB.getNearestEmbeddingPersonName(embedding) }
+                measureTimedValue { imagesVectorDB.getNearestEmbeddingPersonName(embedding!!) }
+            val embeddingRef = recognitionResult?.faceEmbedding
+            val l2normEmb = l2Norm(embedding!!)
+            val l2normRef = l2Norm(embeddingRef!!)
+            BatchedFileLogger.log("L2 Norm: $l2normEmb $l2normRef")
             BatchedFileLogger.log("Time Taken to Perform nearest-neighbor search: ${t3.toLong(DurationUnit.MILLISECONDS)} MILLISECONDS")
             avgT3 += t3.toLong(DurationUnit.MILLISECONDS)
             if (recognitionResult == null) {
@@ -93,49 +132,53 @@ class ImageVectorUseCase(
 
             // Calculate cosine similarity between the nearest-neighbor
             // and the query embedding
-            val (distance,tDistance) = measureTimedValue{ euclideanDistance(embedding, recognitionResult.faceEmbedding) }
+//            val (distance,tDistance) = measureTimedValue{ euclideanDistance(embedding, recognitionResult.faceEmbedding) }
+//            val (distance,tDistance) = measureTimedValue{ cosineDistance(embedding, recognitionResult.faceEmbedding) }
+            val (distance,tDistance) = measureTimedValue{ calculateSimilarity(embedding, recognitionResult.faceEmbedding) }
 
             // If the distance > 0.4, we recognize the person
             // else we conclude that the face does not match enough
             BatchedFileLogger.log("Euclidean Distance: $distance ${recognitionResult.personName} and with time ${tDistance.toLong(DurationUnit.MILLISECONDS)} MILLISECONDS")
-            if (distance < thresholdRepo.getThreshold()) {
-                val (finalPersonId,tAggregator) = measureTimedValue { identityAggregatorRepository.faceDetected(trackingId,recognitionResult.personID) }
-                BatchedFileLogger.log("Time Taken for Aggregator: ${tAggregator.toLong(DurationUnit.MILLISECONDS)}")
-                if (finalPersonId==-1L){
-                    faceRecognitionResults.add(
-                        FaceRecognitionResult("Recognizing", boundingBox, null)
-                    )
-                    continue
-                }
+            if (distance > thresholdRepo.getThreshold()) {
+//                val (finalPersonId,tAggregator) = measureTimedValue { identityAggregatorRepository.faceDetected(trackingId,recognitionResult.personID) }
+//                BatchedFileLogger.log("Time Taken for Aggregator: ${tAggregator.toLong(DurationUnit.MILLISECONDS)}")
+//                if (finalPersonId==-1L){
+//                    faceRecognitionResults.add(
+//                        FaceRecognitionResult("Recognizing", boundingBox, null)
+//                    )
+//                    continue
+//                }
                 val spoofResult = faceSpoofDetector.detectSpoof(frameBitmap, boundingBox)
                 BatchedFileLogger.log("Time Taken for spoof detection: ${spoofResult.timeMillis} MILLISECONDS")
                 avgT4 += spoofResult.timeMillis
-                if (recognitionResult.personID != finalPersonId) {
-                    val person = personDB.getPerson(finalPersonId)
-                    if (person != null) {
-                        faceRecognitionResults.add(
-                            FaceRecognitionResult(person.personName, boundingBox, spoofResult)
-                        )
-                        BatchedFileLogger.log("Face Identified with name: ${person.personName} and Distance $distance")
-                        BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} ${person.personName} ")
-
-                    }
-                } else {
-                    faceRecognitionResults.add(
-                        FaceRecognitionResult(
-                            recognitionResult.personName,
-                            boundingBox,
-                            spoofResult
-                        )
+//                if (recognitionResult.personID != finalPersonId) {
+//                    val person = personDB.getPerson(finalPersonId)
+//                    if (person != null) {
+//                        faceRecognitionResults.add(
+//                            FaceRecognitionResult(person.personName, boundingBox, spoofResult)
+//                        )
+//                        BatchedFileLogger.log("Face Identified with name: ${person.personName} and Distance $distance")
+//                        BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} ${person.personName} ")
+//
+//                    }
+//                } else {
+                faceRecognitionResults.add(
+                    FaceRecognitionResult(
+                        recognitionResult.personName,
+                        boundingBox,
+                        spoofResult
                     )
-                    BatchedFileLogger.log("Face Identified with name: ${recognitionResult.personName} and Distance $distance")
-                    BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} ${recognitionResult.personName} ")
-                }
-            } else {
+                )
+                BatchedFileLogger.log("Face Identified with name: ${recognitionResult.personName} and Distance $distance")
+                BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} ${recognitionResult.personName} ")
+            }
+            else
+            {
+//            } else {
                 faceRecognitionResults.add(
                     FaceRecognitionResult("Not recognized", boundingBox, null)
                 )
-                identityAggregatorRepository.clearFace(trackingId)
+//                identityAggregatorRepository.clearFace(trackingId)
 
 //                BatchedFileLogger.log("Spoof Result: ${spoofResult.isSpoof} and Spoof Score:  ${spoofResult.score} Not recognized")
             }
@@ -176,6 +219,19 @@ class ImageVectorUseCase(
             distance += diff * diff
         }
         return sqrt(distance.toDouble()).toFloat()
+    }
+
+    fun calculateSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
+        if (embedding1.size != embedding2.size) {
+            throw IllegalArgumentException("Embeddings must have the same size")
+        }
+
+        var dotProduct = 0.0f
+        for (i in embedding1.indices) {
+            dotProduct += embedding1[i] * embedding2[i]
+        }
+
+        return dotProduct // Since vectors are already normalized, dot product = cosine similarity
     }
 
     fun removeImages(personID: Long) {

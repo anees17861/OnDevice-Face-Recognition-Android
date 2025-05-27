@@ -2,6 +2,7 @@ package com.ml.shubham0204.facenet_android.domain.embeddings
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.pow
@@ -20,15 +21,17 @@ import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
+import java.nio.ByteOrder
 
 // Derived from the original project:
 // https://github.com/shubham0204/FaceRecognition_With_FaceNet_Android/blob/master/app/src/main/java/com/ml/quaterion/facenetdetection/model/FaceNetModel.kt
 // Utility class for FaceNet model
 @Single
-class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = true) {
+class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = false) {
 
     // Input image size for FaceNet model.
-    private val imgSize = 160
+//    private val imgSize = 160
+    private val imgSize = 112
 
     // Output embedding size
     private val embeddingDim = 512
@@ -37,8 +40,10 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
     private val imageTensorProcessor =
         ImageProcessor.Builder()
             .add(ResizeOp(imgSize, imgSize, ResizeOp.ResizeMethod.BILINEAR))
+//            .add(BGRTransformOp())
             .add(NormalizeOp())
 //            .add(StandardizeOp())
+//            .add(NormalizeNewOp())
             .build()
 
     init {
@@ -56,31 +61,56 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
                     numThreads = 4
                 }
                 useXNNPACK = useXNNPack
-                useNNAPI = true
+                useNNAPI = false
             }
         interpreter =
-            Interpreter(FileUtil.loadMappedFile(context, "facenet_nit.tflite"), interpreterOptions)
+            Interpreter(FileUtil.loadMappedFile(context, "w600k_r50.tflite"), interpreterOptions)
     }
 
     // Gets an face embedding using FaceNet
     suspend fun getFaceEmbedding(image: Bitmap) =
         withContext(Dispatchers.Default) {
-//            val embeddings = runFaceNet(convertBitmapToBuffer(image))[0]
-//            return@withContext l2Normalize(embeddings)  // Add L2 normalization
+            val embeddings = runFaceNet(convertBitmapToBuffer(image))[0]
+            val embeddings_norm = l2Normalize(embeddings)
+            Log.d("FaceNet", embeddings_norm.max().toString() + " " + embeddings_norm.min().toString())
+            return@withContext  embeddings_norm// Add L2 normalization
 
-            return@withContext runFaceNet(convertBitmapToBuffer(image))[0]
+//            return@withContext runFaceNet(convertBitmapToBuffer(image))[0]
         }
 
     // Run the FaceNet model
     private fun runFaceNet(inputs: Any): Array<FloatArray> {
         val faceNetModelOutputs = Array(1) { FloatArray(embeddingDim) }
+//        Log.d("FaceNet", "faceNetModelOutputs: $faceNetModelOutputs")
+//        Log.d("FaceNet", "inputs: $inputs")
         interpreter.run(inputs, faceNetModelOutputs)
         return faceNetModelOutputs
     }
 
-    // Resize the given bitmap and convert it to a ByteBuffer
+//    // Resize the given bitmap and convert it to a ByteBuffer
+//    private fun convertBitmapToBuffer(image: Bitmap): ByteBuffer {
+//        return imageTensorProcessor.process(TensorImage.fromBitmap(image)).buffer
+//    }
+
     private fun convertBitmapToBuffer(image: Bitmap): ByteBuffer {
-        return imageTensorProcessor.process(TensorImage.fromBitmap(image)).buffer
+        // Convert the image to TensorImage and process it
+        val tensorImage = imageTensorProcessor.process(TensorImage.fromBitmap(image))
+        val rgbPixels = tensorImage.tensorBuffer.floatArray
+
+        // Prepare a ByteBuffer for NCHW format
+        val buffer = ByteBuffer.allocateDirect(4 * imgSize * imgSize * 3) // 4 bytes per float
+        buffer.order(ByteOrder.nativeOrder())
+
+        // Rearrange the data to NCHW format
+        val channelSize = imgSize * imgSize
+        for (c in 0 until 3) { // Iterate over channels (R, G, B)
+            for (i in 0 until channelSize) {
+                buffer.putFloat(rgbPixels[i * 3 + c]) // Extract channel-first data
+            }
+        }
+
+        buffer.rewind()
+        return buffer
     }
 
     // Op to perform standardization
@@ -101,10 +131,14 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
         }
     }
 
-    // Add L2 normalization for embeddings
+    // L2 normalization implementation
     private fun l2Normalize(embeddings: FloatArray): FloatArray {
         val norm = sqrt(embeddings.map { it * it }.sum())
-        return embeddings.map { it / norm }.toFloatArray()
+        return if (norm > 0) {
+            embeddings.map { it / norm }.toFloatArray()
+        } else {
+            embeddings
+        }
     }
 
     class NormalizeOp : TensorOperator {
@@ -121,4 +155,38 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
             return output
         }
     }
+
+    class NormalizeNewOp : TensorOperator {
+        override fun apply(p0: TensorBuffer?): TensorBuffer {
+            val pixels = p0!!.floatArray
+
+            // InsightFace normalization: (x - 127.5) / 128.0
+            for (i in pixels.indices) {
+                pixels[i] = (pixels[i]/255.0f)*2.0f - 1.0f
+            }
+
+            val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
+            output.loadArray(pixels)
+            return output
+        }
+    }
+
+    class BGRTransformOp : TensorOperator {
+        override fun apply(p0: TensorBuffer?): TensorBuffer {
+            val pixels = p0!!.floatArray
+            // Transform RGB to BGR for each pixel
+            // Input shape is [H*W*3]
+            for (i in 0 until pixels.size step 3) {
+                val r = pixels[i]
+                pixels[i] = pixels[i + 2] // B = original R
+                pixels[i + 2] = r // R = original B
+                // G stays in place
+            }
+            
+            val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
+            output.loadArray(pixels)
+            return output
+        }
+    }
+
 }

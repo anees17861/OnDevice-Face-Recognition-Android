@@ -133,6 +133,8 @@ dependencies {
     implementation(libs.tasks.vision)
 
     implementation(project(":opencv-sdk"))
+    implementation(libs.onnxruntime)
+//    implementation(libs.onnxruntime.gpu)
 //    debugImplementation(libs.androidx.ui.tooling)
 //    debugImplementation(libs.androidx.ui.test.manifest)
 }

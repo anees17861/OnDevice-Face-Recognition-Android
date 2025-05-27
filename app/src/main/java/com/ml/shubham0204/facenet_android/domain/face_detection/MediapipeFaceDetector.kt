@@ -37,7 +37,7 @@ class MediapipeFaceDetector(private val context: Context) {
 
     // The model is stored in the assets folder
     private val modelName = "blaze_face_short_range.tflite"
-    private val confidenceThreshold = 0.9f
+    private val confidenceThreshold = 0.8f
     private val minimumSuppressionThreshold = 0.5f
     private val baseOptions = BaseOptions.builder().setModelAssetPath(modelName).build()
     private val faceDetectorOptions =
@@ -97,18 +97,18 @@ class MediapipeFaceDetector(private val context: Context) {
                 // return the cropped face
                 val rect = faces[0].boundingBox().toRect()
                 if (validateRect(imageBitmap, rect)) {
-//                    val croppedBitmap =
-//                        Bitmap.createBitmap(
-//                            imageBitmap,
-//                            rect.left,
-//                            rect.top,
-//                            rect.width(),
-//                            rect.height()
-//                        )
-                    val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(imageBitmap, faces[0]) }
-                    BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
+                    val croppedBitmap =
+                        Bitmap.createBitmap(
+                            imageBitmap,
+                            rect.left,
+                            rect.top,
+                            rect.width(),
+                            rect.height()
+                        )
+//                    val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(imageBitmap, faces[0]) }
+//                    BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
 //                    saveBitmap(context,alignedFace,"test_input" )
-                    return@withContext Result.success(alignedFace)
+                    return@withContext Result.success(croppedBitmap)
                 } else {
                     return@withContext Result.failure<Bitmap>(
                         AppException(ErrorCode.FACE_DETECTOR_FAILURE)
@@ -160,25 +160,28 @@ class MediapipeFaceDetector(private val context: Context) {
             // Return cropped faces with their tracking IDs
             return@withContext trackedFaces.map { (id, detection) ->
                 val rect = detection.boundingBox().toRect()
-                val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(frameBitmap, detection) }
-                BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
-//                saveBitmap(context,alignedFace, id.toString())
-//                val croppedBitmap = Bitmap.createBitmap(
-//                    frameBitmap,
-//                    rect.left,
-//                    rect.top,
-//                    rect.width(),
-//                    rect.height()
-//                )
+//                val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(frameBitmap, detection) }
+//                BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
 
-                Triple(alignedFace, rect,id)
+                val croppedBitmap = Bitmap.createBitmap(
+                    frameBitmap,
+                    rect.left,
+                    rect.top,
+                    rect.width(),
+                    rect.height()
+                )
+//                saveBitmap(context,alignedFace, id.toString())
+                Triple(croppedBitmap, rect,id)
             }
         }
 
     // DEBUG: For testing purpose, saves the Bitmap to the app's private storage
     fun saveBitmap(context: Context, image: Bitmap, name: String) {
+        Log.d("SAving",image.byteCount.toString())
         val fileOutputStream = FileOutputStream(File(context.filesDir.absolutePath + "/$name.png"))
         image.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream)
+        fileOutputStream.flush()
+        fileOutputStream.close()
     }
 
     private fun rotateBitmap(source: Bitmap, degrees: Float): Bitmap {
@@ -227,7 +230,7 @@ class MediapipeFaceDetector(private val context: Context) {
 
             // Get the face bounding box with margin
             val boundingBox = detection.boundingBox()
-            val margin = 0.2 // 20% margin
+            val margin = 0.1 // 20% margin
             val left = boundingBox.left
             val top = boundingBox.top
             val right = boundingBox.right
@@ -289,8 +292,10 @@ class MediapipeFaceDetector(private val context: Context) {
                 cropHeight,
                 Bitmap.Config.ARGB_8888
             )
-            Utils.matToBitmap(croppedMat, resultBitmap)
+//            saveBitmap(context,alignedMat,"aligned_result")
 
+            Utils.matToBitmap(croppedMat, resultBitmap)
+            saveBitmap(context,resultBitmap,"aligned_result_crop")
             // Clean up OpenCV resources
             sourceMat.release()
             alignedMat.release()
@@ -306,6 +311,7 @@ class MediapipeFaceDetector(private val context: Context) {
 //            return sourceBitmap
 //        }
     }
+
 
 
 // Alignment without opencv

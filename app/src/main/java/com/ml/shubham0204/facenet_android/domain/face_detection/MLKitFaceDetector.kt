@@ -40,12 +40,14 @@ class MLKitFaceDetector(private val context: Context) {
     // Multiple object detection in static images
     var highAccuracyOpts: FaceDetectorOptions =
         FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
             .enableTracking()
             .build()
     private val faceDetector = FaceDetection.getClient(highAccuracyOpts)
+//    private val faceTracker = FaceTracker()
+
 
     suspend fun getCroppedFace(imageUri: Uri): Result<Bitmap> =
         withContext(Dispatchers.IO) {
@@ -190,9 +192,9 @@ class MLKitFaceDetector(private val context: Context) {
                 .map { detection ->
 //                    if (detection.trackingId != null) {
                     val id = detection.trackingId
-                    val rotY = detection.headEulerAngleY // Head is rotated to the right rotY degrees
-                    val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
-                    val rotX = detection.headEulerAngleX // Head is rotated to the right rotY degrees
+//                    val rotY = detection.headEulerAngleY // Head is rotated to the right rotY degrees
+//                    val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
+//                    val rotX = detection.headEulerAngleX // Head is rotated to the right rotY degrees
 //                        val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
 //                    val aligned_face = alignFace(frameBitmap,detection,160)
                     Triple(frameBitmap, detection.boundingBox,id!!)

@@ -6,4 +6,7 @@ enum class ErrorCode(val message: String) {
     FACE_DETECTOR_FAILURE("Face detection failed")
 }
 
-class AppException(val errorCode: ErrorCode) : Exception()
+class AppException(val errorCode: ErrorCode) : Exception(){
+    override val message: String
+        get() = errorCode.message
+}
