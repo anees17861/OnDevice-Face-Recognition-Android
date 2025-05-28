@@ -64,7 +64,7 @@ class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = f
                 useNNAPI = false
             }
         interpreter =
-            Interpreter(FileUtil.loadMappedFile(context, "w600k_r50.tflite"), interpreterOptions)
+            Interpreter(FileUtil.loadMappedFile(context, "models/w600k_r50.tflite"), interpreterOptions)
     }
 
     // Gets an face embedding using FaceNet

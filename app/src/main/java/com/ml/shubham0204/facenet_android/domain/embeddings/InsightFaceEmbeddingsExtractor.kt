@@ -3,13 +3,10 @@ package com.ml.shubham0204.facenet_android.domain.embeddings
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.ml.shubham0204.facenet_android.data.FaceImageRecord
 import org.koin.core.annotation.Single
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.sqrt
 
@@ -18,7 +15,7 @@ class InsightFaceEmbeddingsExtractor(private val context: Context) {
 
     companion object {
         private const val TAG = "InsightFaceExtractor"
-        private const val MODEL_NAME = "w600k_r50.tflite" // Place your model in assets folder
+        private const val MODEL_NAME = "models/w600k_r50.tflite" // Place your model in assets folder
         private const val INPUT_SIZE = 112 // Buffalo Large typically uses 112x112 input
         private const val EMBEDDING_SIZE = 512 // Buffalo Large produces 512-dimensional embeddings
         private const val CHANNELS = 3

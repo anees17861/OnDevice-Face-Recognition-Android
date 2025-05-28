@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.PointF
 import android.graphics.Rect
 import android.net.Uri
 import android.util.Log
@@ -20,15 +21,22 @@ import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.face.FaceLandmark
 import com.ml.shubham0204.facenet_android.domain.AppException
 import com.ml.shubham0204.facenet_android.domain.ErrorCode
+import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
+import org.koin.core.time.measureTimedValue
 import java.io.File
 import java.io.FileOutputStream
 
+import org.opencv.core.*
+import org.opencv.imgproc.Imgproc
+import org.opencv.android.Utils
+
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import kotlin.math.atan2
+import kotlin.time.DurationUnit
 
 // Utility class for interacting with MLKit's Face Detector
 // See https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector/android
@@ -43,7 +51,7 @@ class MLKitFaceDetector(private val context: Context) {
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-            .enableTracking()
+//            .enableTracking()
             .build()
     private val faceDetector = FaceDetection.getClient(highAccuracyOpts)
 //    private val faceTracker = FaceTracker()
@@ -106,7 +114,8 @@ class MLKitFaceDetector(private val context: Context) {
                             rect.height()
                         )
 //                    val aligned_face = alignFace(imageBitmap,faces[0],160)
-                    return@withContext Result.success(imageBitmap)
+                    val alignedFace = alignFaceUsing5Points(imageBitmap, faces[0])
+                    return@withContext Result.success(alignedFace)
                 } else {
                     return@withContext Result.failure<Bitmap>(
                         AppException(ErrorCode.FACE_DETECTOR_FAILURE)
@@ -184,24 +193,45 @@ class MLKitFaceDetector(private val context: Context) {
     // Detects multiple faces from the `frameBitmap`
     // and returns pairs of (croppedFace , boundingBoxRect)
     // Used by ImageVectorUseCase.kt
-    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Triple<Bitmap, Rect,Int>> =
+//    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Triple<Bitmap, Rect,Int>> =
+//        withContext(Dispatchers.IO) {
+////            val scaledbitmap = Bitmap.createScaledBitmap(frameBitmap,480, 360, true)
+//            return@withContext detectProcess(faceDetector, InputImage.fromBitmap(frameBitmap, 0))
+//                .filter { validateRect(frameBitmap, it.boundingBox) }
+//                .map { detection ->
+////                    if (detection.trackingId != null) {
+//                    val id = 1
+////                    val id = detection.trackingId
+////                    val rotY = detection.headEulerAngleY // Head is rotated to the right rotY degrees
+////                    val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
+////                    val rotX = detection.headEulerAngleX // Head is rotated to the right rotY degrees
+////                        val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
+////                    val aligned_face = alignFace(frameBitmap,detection,160)
+//                    val alignedFace = alignFaceUsing5Points(frameBitmap, detection)
+//                    Triple(alignedFace, detection.boundingBox,id!!)
+//                }
+//
+//        }
+    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Triple<Bitmap, Rect, Int>> =
         withContext(Dispatchers.IO) {
-//            val scaledbitmap = Bitmap.createScaledBitmap(frameBitmap,480, 360, true)
-            return@withContext detectProcess(faceDetector, InputImage.fromBitmap(frameBitmap, 0))
+            val faces = detectProcess(faceDetector, InputImage.fromBitmap(frameBitmap, 0))
                 .filter { validateRect(frameBitmap, it.boundingBox) }
-                .map { detection ->
-//                    if (detection.trackingId != null) {
-                    val id = detection.trackingId
-//                    val rotY = detection.headEulerAngleY // Head is rotated to the right rotY degrees
-//                    val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
-//                    val rotX = detection.headEulerAngleX // Head is rotated to the right rotY degrees
-//                        val rotZ = detection.headEulerAngleZ // Head is tilted sideways rotZ degrees
-//                    val aligned_face = alignFace(frameBitmap,detection,160)
-                    Triple(frameBitmap, detection.boundingBox,id!!)
-                }
 
+            // Find the largest face by comparing bounding box areas
+            val ( largestFace,tLargestFace ) = measureTimedValue {   faces.maxByOrNull { face ->
+                face.boundingBox.width() * face.boundingBox.height()
+            } }
+            Log.d("MLKitFaceDetector", "Time Taken for Largest Face: ${tLargestFace} MILLISECONDS")
+
+
+            return@withContext if (largestFace != null) {
+                val (alignedFace,tAlignedFace) = measureTimedValue{alignFaceUsing5Points(frameBitmap, largestFace)}
+                Log.d("MLKitFaceDetector", "Time Taken for Aligned Face: ${tAlignedFace} MILLISECONDS")
+                listOf(Triple(alignedFace, largestFace.boundingBox, 1))
+            } else {
+                emptyList()
+            }
         }
-
 //                .map { rect ->
 //                    val croppedBitmap =
 //                        Bitmap.createBitmap(
@@ -242,6 +272,144 @@ class MLKitFaceDetector(private val context: Context) {
                 .addOnSuccessListener { faces -> it.resumeWith(Result.success(faces)) }
                 .addOnFailureListener { e -> it.resumeWith(Result.failure(e)) }
         }
+
+    private fun alignFaceUsing5Points(bitmap: Bitmap, face: Face, targetSize: Int = 112): Bitmap {
+        // Get the required face landmarks
+        val leftEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position
+        val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
+        val nose = face.getLandmark(FaceLandmark.NOSE_BASE)?.position
+        val leftMouth = face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position
+        val rightMouth = face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position
+
+        // Check if all landmarks are detected
+        if (leftEye == null || rightEye == null || nose == null ||
+            leftMouth == null || rightMouth == null) {
+            return bitmap // Return original bitmap if landmarks are missing
+        }
+
+        try {
+            // Source points (detected landmarks)
+            val srcPoints = MatOfPoint2f()
+            val srcPointsArray = arrayOf(
+                Point(leftEye.x.toDouble(), leftEye.y.toDouble()),
+                Point(rightEye.x.toDouble(), rightEye.y.toDouble()),
+                Point(nose.x.toDouble(), nose.y.toDouble())
+            )
+            srcPoints.fromArray(*srcPointsArray)
+
+            // Standard InsightFace/Buffalo-L reference points (normalized coordinates)
+            val dstPoints = MatOfPoint2f()
+            val dstPointsArray = arrayOf(
+                Point(38.2946, 51.6963),  // Left eye
+                Point(73.5318, 51.5014),  // Right eye
+                Point(56.0252, 71.7366)   // Nose
+            )
+            dstPoints.fromArray(*dstPointsArray)
+
+            // Convert bitmap to OpenCV Mat
+            val sourceMat = Mat()
+            Utils.bitmapToMat(bitmap, sourceMat)
+
+            // Calculate transformation matrix using three points (eyes and nose)
+            val transformMatrix = Imgproc.getAffineTransform(srcPoints, dstPoints)
+
+            // Create output matrix and apply transformation
+            val outputMat = Mat()
+            Imgproc.warpAffine(
+                sourceMat,
+                outputMat,
+                transformMatrix,
+                Size(targetSize.toDouble(), targetSize.toDouble()),
+                Imgproc.INTER_LINEAR
+            )
+
+            // Convert back to Bitmap
+            val alignedBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(outputMat, alignedBitmap)
+
+            // Cleanup
+            sourceMat.release()
+            outputMat.release()
+            transformMatrix.release()
+            srcPoints.release()
+            dstPoints.release()
+
+            return alignedBitmap
+        } catch (e: Exception) {
+            Log.e("MLKitFaceDetector", "Face alignment failed: ${e.message}")
+            return bitmap
+        }
+    }
+//    private fun alignFaceUsing5Points(bitmap: Bitmap, face: Face, targetSize: Int = 112): Bitmap {
+//        // Get the required face landmarks
+//        val leftEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position
+//        val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
+//        val nose = face.getLandmark(FaceLandmark.NOSE_BASE)?.position
+//        val leftMouth = face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position
+//        val rightMouth = face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position
+//
+//        // Check if all landmarks are detected
+//        if (leftEye == null || rightEye == null || nose == null ||
+//            leftMouth == null || rightMouth == null) {
+//            return bitmap // Return original bitmap if landmarks are missing
+//        }
+//
+//        // Source points (detected landmarks)
+//        val srcPoints = MatOfPoint2f(
+//            Point(leftEye.x.toDouble(), leftEye.y.toDouble()),
+//            Point(rightEye.x.toDouble(), rightEye.y.toDouble()),
+//            Point(nose.x.toDouble(), nose.y.toDouble()),
+//            Point(leftMouth.x.toDouble(), leftMouth.y.toDouble()),
+//            Point(rightMouth.x.toDouble(), rightMouth.y.toDouble())
+//        )
+//
+//        // Standard InsightFace/Buffalo-L reference points (normalized coordinates)
+//        val dstPoints = MatOfPoint2f(
+//            Point(38.2946, 51.6963),  // Left eye
+//            Point(73.5318, 51.5014),  // Right eye
+//            Point(56.0252, 71.7366),  // Nose
+//            Point(41.5493, 92.3655),  // Left mouth
+//            Point(70.7299, 92.2041)   // Right mouth
+//        )
+//
+//        try {
+//            // Convert bitmap to OpenCV Mat
+//            val sourceMat = Mat()
+//            Utils.bitmapToMat(bitmap, sourceMat)
+//
+//            // Calculate transformation matrix
+//            val transformMatrix = Imgproc.estimateAffine2D(srcPoints, dstPoints)
+//            if (transformMatrix.empty()) {
+//                return bitmap
+//            }
+//
+//            // Create output matrix and apply transformation
+//            val outputMat = Mat()
+//            Imgproc.warpAffine(
+//                sourceMat,
+//                outputMat,
+//                transformMatrix,
+//                Size(targetSize.toDouble(), targetSize.toDouble()),
+//                Imgproc.INTER_LINEAR
+//            )
+//
+//            // Convert back to Bitmap
+//            val alignedBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+//            Utils.matToBitmap(outputMat, alignedBitmap)
+//
+//            // Cleanup
+//            sourceMat.release()
+//            outputMat.release()
+//            transformMatrix.release()
+//            srcPoints.release()
+//            dstPoints.release()
+//
+//            return alignedBitmap
+//        } catch (e: Exception) {
+//            Log.e("MLKitFaceDetector", "Face alignment failed: ${e.message}")
+//            return bitmap
+//        }
+//    }
 
 
 }

@@ -25,8 +25,8 @@ import kotlin.time.measureTimedValue
 
 @Single
 class ImageVectorUseCase(
-    private val mlKitFaceDetector: MLKitFaceDetector,
-//    private val mediapipeFaceDetector: MediapipeFaceDetector,
+//    private val mlKitFaceDetector: MLKitFaceDetector,
+    private val mediapipeFaceDetector: MediapipeFaceDetector,
     private val faceSpoofDetector: FaceSpoofDetector,
     private val imagesVectorDB: ImagesVectorDB,
     private val personDB: PersonDB,
@@ -51,8 +51,8 @@ class ImageVectorUseCase(
     // Add the person's image to the database
     suspend fun addImage(personID: Long, personName: String, imageUri: Uri): Result<Boolean> {
         // Perform face-detection and get the cropped face as a Bitmap
-//        val faceDetectionResult = mediapipeFaceDetector.getCroppedFace(imageUri)
-        val faceDetectionResult = mlKitFaceDetector.getCroppedFace(imageUri)
+        val faceDetectionResult = mediapipeFaceDetector.getCroppedFace(imageUri)
+//        val faceDetectionResult = mlKitFaceDetector.getCroppedFace(imageUri)
         if (faceDetectionResult.isSuccess) {
             // Get the embedding for the cropped face, and store it
             // in the database, along with `personId` and `personName`
@@ -84,10 +84,10 @@ class ImageVectorUseCase(
         frameBitmap: Bitmap
     ): Pair<RecognitionMetrics?, List<FaceRecognitionResult>> {
         // Perform face-detection and get the cropped face as a Bitmap
-//        val (faceDetectionResult, t1) =
-//            measureTimedValue { mediapipeFaceDetector.getAllCroppedFaces(frameBitmap) }
         val (faceDetectionResult, t1) =
-            measureTimedValue { mlKitFaceDetector.getAllCroppedFaces(frameBitmap) }
+            measureTimedValue { mediapipeFaceDetector.getAllCroppedFaces(frameBitmap) }
+//        val (faceDetectionResult, t1) =
+//            measureTimedValue { mlKitFaceDetector.getAllCroppedFaces(frameBitmap) }
         BatchedFileLogger.log("Time Taken for Face Detection: ${t1.toLong(DurationUnit.MILLISECONDS)} MILLISECONDS")
         val faceRecognitionResults = ArrayList<FaceRecognitionResult>()
         var avgT2 = 0L

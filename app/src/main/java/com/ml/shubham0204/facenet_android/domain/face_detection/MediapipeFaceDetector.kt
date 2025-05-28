@@ -15,6 +15,8 @@ import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetector
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceLandmark
 import com.ml.shubham0204.facenet_android.domain.AppException
 import com.ml.shubham0204.facenet_android.domain.ErrorCode
 import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
@@ -97,18 +99,20 @@ class MediapipeFaceDetector(private val context: Context) {
                 // return the cropped face
                 val rect = faces[0].boundingBox().toRect()
                 if (validateRect(imageBitmap, rect)) {
-                    val croppedBitmap =
-                        Bitmap.createBitmap(
-                            imageBitmap,
-                            rect.left,
-                            rect.top,
-                            rect.width(),
-                            rect.height()
-                        )
-//                    val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(imageBitmap, faces[0]) }
+//                    val croppedBitmap =
+//                        Bitmap.createBitmap(
+//                            imageBitmap,
+//                            rect.left,
+//                            rect.top,
+//                            rect.width(),
+//                            rect.height()
+//                        )
+////                    val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(imageBitmap, faces[0]) }
 //                    BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
+                    val (alignedFace,talignFaceUsing5Points) = measureTimedValue {   alignFaceUsing5Points(imageBitmap, faces[0]) }
+                    BatchedFileLogger.log("Time taken to align face: $talignFaceUsing5Points")
 //                    saveBitmap(context,alignedFace,"test_input" )
-                    return@withContext Result.success(croppedBitmap)
+                    return@withContext Result.success(alignedFace)
                 } else {
                     return@withContext Result.failure<Bitmap>(
                         AppException(ErrorCode.FACE_DETECTOR_FAILURE)
@@ -162,16 +166,17 @@ class MediapipeFaceDetector(private val context: Context) {
                 val rect = detection.boundingBox().toRect()
 //                val (alignedFace,tAlignFaceWithOpencv) = measureTimedValue {   alignFaceWithOpenCV(frameBitmap, detection) }
 //                BatchedFileLogger.log("Time taken to align face: $tAlignFaceWithOpencv")
-
-                val croppedBitmap = Bitmap.createBitmap(
-                    frameBitmap,
-                    rect.left,
-                    rect.top,
-                    rect.width(),
-                    rect.height()
-                )
-//                saveBitmap(context,alignedFace, id.toString())
-                Triple(croppedBitmap, rect,id)
+                val (alignedFace,talignFaceUsing5Points) = measureTimedValue {   alignFaceUsing5Points(frameBitmap, detection) }
+                BatchedFileLogger.log("Time taken to align face: $talignFaceUsing5Points")
+//                val croppedBitmap = Bitmap.createBitmap(
+//                    frameBitmap,
+//                    rect.left,
+//                    rect.top,
+//                    rect.width(),
+//                    rect.height()
+//                )
+                saveBitmap(context,alignedFace, "test_aligned_5pt")
+                Triple(alignedFace, rect,id)
             }
         }
 
@@ -310,6 +315,96 @@ class MediapipeFaceDetector(private val context: Context) {
 //            Log.e("FaceAlignment", "Error during OpenCV face alignment: ${e.message}")
 //            return sourceBitmap
 //        }
+    }
+
+    private fun alignFaceUsing5Points(sourceBitmap: Bitmap, detection: Detection, targetSize: Int = 112): Bitmap {
+
+        if (!detection.keypoints().isPresent || detection.keypoints().get().size < 3) {
+            return sourceBitmap
+        }
+
+        val leftEye = detection.keypoints().get()[0]
+        val rightEye = detection.keypoints().get()[1]
+        val nose = detection.keypoints().get()[2]
+
+        // Convert normalized coordinates to image coordinates
+        val leftEyePoint = Point(
+            (leftEye.x() * sourceBitmap.width).toDouble(),
+            (leftEye.y() * sourceBitmap.height).toDouble()
+        )
+        val rightEyePoint = Point(
+            (rightEye.x() * sourceBitmap.width).toDouble(),
+            (rightEye.y() * sourceBitmap.height).toDouble()
+        )
+        val nosePoint = Point(
+            (nose.x() * sourceBitmap.width).toDouble(),
+            (nose.y() * sourceBitmap.height).toDouble()
+        )
+
+        // Get the required face landmarks
+//        val leftEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position
+//        val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
+//        val nose = face.getLandmark(FaceLandmark.NOSE_BASE)?.position
+//        val leftMouth = face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position
+//        val rightMouth = face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position
+
+        // Check if all landmarks are detected
+        if (leftEye == null || rightEye == null || nose == null) {
+            return sourceBitmap // Return original bitmap if landmarks are missing
+        }
+
+        try {
+            // Source points (detected landmarks)
+            val srcPoints = MatOfPoint2f()
+            val srcPointsArray = arrayOf(
+                Point(leftEyePoint.x, leftEyePoint.y),
+                Point(rightEyePoint.x, rightEyePoint.y),
+                Point(nosePoint.x, nosePoint.y)
+            )
+            srcPoints.fromArray(*srcPointsArray)
+
+            // Standard InsightFace/Buffalo-L reference points (normalized coordinates)
+            val dstPoints = MatOfPoint2f()
+            val dstPointsArray = arrayOf(
+                Point(38.2946, 51.6963),  // Left eye
+                Point(73.5318, 51.5014),  // Right eye
+                Point(56.0252, 71.7366)   // Nose
+            )
+            dstPoints.fromArray(*dstPointsArray)
+
+            // Convert bitmap to OpenCV Mat
+            val sourceMat = Mat()
+            Utils.bitmapToMat(sourceBitmap, sourceMat)
+
+            // Calculate transformation matrix using three points (eyes and nose)
+            val transformMatrix = Imgproc.getAffineTransform(srcPoints, dstPoints)
+
+            // Create output matrix and apply transformation
+            val outputMat = Mat()
+            Imgproc.warpAffine(
+                sourceMat,
+                outputMat,
+                transformMatrix,
+                Size(targetSize.toDouble(), targetSize.toDouble()),
+                Imgproc.INTER_LINEAR
+            )
+
+            // Convert back to Bitmap
+            val alignedBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(outputMat, alignedBitmap)
+
+            // Cleanup
+            sourceMat.release()
+            outputMat.release()
+            transformMatrix.release()
+            srcPoints.release()
+            dstPoints.release()
+
+            return alignedBitmap
+        } catch (e: Exception) {
+            Log.e("MLKitFaceDetector", "Face alignment failed: ${e.message}")
+            return sourceBitmap
+        }
     }
 
 
