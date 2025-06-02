@@ -14,6 +14,7 @@ import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.TensorOperator
 import org.tensorflow.lite.support.image.ImageProcessor
@@ -27,7 +28,7 @@ import java.nio.ByteOrder
 // https://github.com/shubham0204/FaceRecognition_With_FaceNet_Android/blob/master/app/src/main/java/com/ml/quaterion/facenetdetection/model/FaceNetModel.kt
 // Utility class for FaceNet model
 @Single
-class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = false) {
+class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = true) {
 
     // Input image size for FaceNet model.
 //    private val imgSize = 160
@@ -40,10 +41,8 @@ class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = f
     private val imageTensorProcessor =
         ImageProcessor.Builder()
             .add(ResizeOp(imgSize, imgSize, ResizeOp.ResizeMethod.BILINEAR))
-//            .add(BGRTransformOp())
             .add(NormalizeOp())
 //            .add(StandardizeOp())
-//            .add(NormalizeNewOp())
             .build()
 
     init {
@@ -61,10 +60,21 @@ class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = f
                     numThreads = 4
                 }
                 useXNNPACK = useXNNPack
-                useNNAPI = false
+                useNNAPI = true
+                // Configure NNAPI delegate with options
+//                val nnApiOptions = NnApiDelegate.Options().apply {
+//                    setExecutionPreference(2)
+//                    // Use allowFp16 = false for better precision at the cost of speed
+//                    allowFp16 = false
+//                    // Set the acceleration mode
+//                    acceleratorName = null  // null means use any available accelerator
+//                    useNNAPI = false
+//                }
+//
+//                addDelegate(NnApiDelegate(nnApiOptions))
             }
         interpreter =
-            Interpreter(FileUtil.loadMappedFile(context, "models/w600k_r50.tflite"), interpreterOptions)
+            Interpreter(FileUtil.loadMappedFile(context, "models/w600k_r50_float32.tflite"), interpreterOptions)
     }
 
     // Gets an face embedding using FaceNet
@@ -88,30 +98,30 @@ class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = f
     }
 
 //    // Resize the given bitmap and convert it to a ByteBuffer
-//    private fun convertBitmapToBuffer(image: Bitmap): ByteBuffer {
-//        return imageTensorProcessor.process(TensorImage.fromBitmap(image)).buffer
-//    }
-
     private fun convertBitmapToBuffer(image: Bitmap): ByteBuffer {
-        // Convert the image to TensorImage and process it
-        val tensorImage = imageTensorProcessor.process(TensorImage.fromBitmap(image))
-        val rgbPixels = tensorImage.tensorBuffer.floatArray
-
-        // Prepare a ByteBuffer for NCHW format
-        val buffer = ByteBuffer.allocateDirect(4 * imgSize * imgSize * 3) // 4 bytes per float
-        buffer.order(ByteOrder.nativeOrder())
-
-        // Rearrange the data to NCHW format
-        val channelSize = imgSize * imgSize
-        for (c in 0 until 3) { // Iterate over channels (R, G, B)
-            for (i in 0 until channelSize) {
-                buffer.putFloat(rgbPixels[i * 3 + c]) // Extract channel-first data
-            }
-        }
-
-        buffer.rewind()
-        return buffer
+        return imageTensorProcessor.process(TensorImage.fromBitmap(image)).buffer
     }
+
+//    private fun convertBitmapToBuffer(image: Bitmap): ByteBuffer {
+//        // Convert the image to TensorImage and process it
+//        val tensorImage = imageTensorProcessor.process(TensorImage.fromBitmap(image))
+//        val rgbPixels = tensorImage.tensorBuffer.floatArray
+//
+//        // Prepare a ByteBuffer for NCHW format
+//        val buffer = ByteBuffer.allocateDirect(4 * imgSize * imgSize * 3) // 4 bytes per float
+//        buffer.order(ByteOrder.nativeOrder())
+//
+//        // Rearrange the data to NCHW format
+//        val channelSize = imgSize * imgSize
+//        for (c in 0 until 3) { // Iterate over channels (R, G, B)
+//            for (i in 0 until channelSize) {
+//                buffer.putFloat(rgbPixels[i * 3 + c]) // Extract channel-first data
+//            }
+//        }
+//
+//        buffer.rewind()
+//        return buffer
+//    }
 
     // Op to perform standardization
     // x' = ( x - mean ) / std_dev
@@ -156,37 +166,6 @@ class FaceNet(context: Context, useGpu: Boolean = false, useXNNPack: Boolean = f
         }
     }
 
-    class NormalizeNewOp : TensorOperator {
-        override fun apply(p0: TensorBuffer?): TensorBuffer {
-            val pixels = p0!!.floatArray
 
-            // InsightFace normalization: (x - 127.5) / 128.0
-            for (i in pixels.indices) {
-                pixels[i] = (pixels[i]/255.0f)*2.0f - 1.0f
-            }
-
-            val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
-            output.loadArray(pixels)
-            return output
-        }
-    }
-
-    class BGRTransformOp : TensorOperator {
-        override fun apply(p0: TensorBuffer?): TensorBuffer {
-            val pixels = p0!!.floatArray
-            // Transform RGB to BGR for each pixel
-            // Input shape is [H*W*3]
-            for (i in 0 until pixels.size step 3) {
-                val r = pixels[i]
-                pixels[i] = pixels[i + 2] // B = original R
-                pixels[i + 2] = r // R = original B
-                // G stays in place
-            }
-            
-            val output = TensorBufferFloat.createFixedSize(p0.shape, DataType.FLOAT32)
-            output.loadArray(pixels)
-            return output
-        }
-    }
 
 }
