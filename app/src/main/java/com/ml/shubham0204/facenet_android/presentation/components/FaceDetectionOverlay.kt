@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
@@ -19,10 +20,12 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toRectF
 import androidx.core.view.doOnLayout
 import androidx.lifecycle.LifecycleOwner
 import com.ml.shubham0204.facenet_android.presentation.screens.detect_screen.DetectScreenViewModel
+import com.ml.shubham0204.facenet_android.utils.ImageUtils
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +53,7 @@ class FaceDetectionOverlay(
     private var isImageTransformedInitialized = false
     private var isBoundingBoxTransformedInitialized = false
 
+    private lateinit var sourceBitmap: Bitmap
     private lateinit var frameBitmap: Bitmap
     private var isProcessing = false
     private var cameraFacing: Int = CameraSelector.LENS_FACING_BACK
@@ -86,7 +90,7 @@ class FaceDetectionOverlay(
                     ImageAnalysis.Builder()
                         .setTargetAspectRatio(AspectRatio.RATIO_16_9)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+//                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                         .build()
                 frameAnalyzer.setAnalyzer(Executors.newSingleThreadExecutor(), analyzer)
                 cameraProvider.unbindAll()
@@ -166,13 +170,28 @@ class FaceDetectionOverlay(
             isProcessing = true
 
             // Transform android.net.Image to Bitmap
-            frameBitmap =
+            sourceBitmap =
                 Bitmap.createBitmap(
                     image.image!!.width,
                     image.image!!.height,
                     Bitmap.Config.ARGB_8888
                 )
-            frameBitmap.copyPixelsFromBuffer(image.planes[0].buffer)
+            if (image.format == ImageFormat.YUV_420_888) {
+
+                var rgbArray = IntArray(image.width * image.height)
+                ImageUtils.convertYUVToARGB(image, rgbArray)
+                sourceBitmap.setPixels(
+                    rgbArray,
+                    0,
+                    sourceBitmap.width,
+                    0,
+                    0,
+                    sourceBitmap.width,
+                    sourceBitmap.height
+                )
+            } else {
+                sourceBitmap.copyPixelsFromBuffer(image.planes[0].buffer)
+            }
 
             // Configure frameHeight and frameWidth for output2overlay transformation matrix
             // and apply it to `frameBitmap`
@@ -183,11 +202,11 @@ class FaceDetectionOverlay(
             }
             frameBitmap =
                 Bitmap.createBitmap(
-                    frameBitmap,
+                    sourceBitmap,
                     0,
                     0,
-                    frameBitmap.width,
-                    frameBitmap.height,
+                    sourceBitmap.width,
+                    sourceBitmap.height,
                     imageTransform,
                     false
                 )
