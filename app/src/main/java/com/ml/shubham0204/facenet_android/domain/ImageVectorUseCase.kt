@@ -16,6 +16,11 @@ import com.ml.shubham0204.facenet_android.domain.face_detection.MLKitFaceDetecto
 import com.ml.shubham0204.facenet_android.domain.face_detection.MediapipeFaceDetector
 import com.ml.shubham0204.facenet_android.util.BatchedFileLogger
 import org.koin.core.annotation.Single
+import org.opencv.android.Utils
+import org.opencv.core.Core
+import org.opencv.core.Mat
+import org.opencv.core.MatOfDouble
+import org.opencv.imgproc.Imgproc
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.time.DurationUnit
@@ -36,6 +41,8 @@ class ImageVectorUseCase(
 
     private val thresholdRepo: ThresholdPreferenceRepository,
     private val identityAggregatorRepository: IdentityAggregatorRepository
+
+
 ) {
 
     data class FaceRecognitionResult(
@@ -97,6 +104,11 @@ class ImageVectorUseCase(
         for (result in faceDetectionResult) {
             // Get the embedding for the cropped face (query embedding)
             val (croppedBitmap, boundingBox,trackingId) = result
+            val blurry = isFrameBlurry(croppedBitmap)
+//            if (blurry) {
+//                faceRecognitionResults.add(FaceRecognitionResult("Blurry", boundingBox))
+//                continue
+//            }
             val (embedding, t2) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
 //            insightFaceEmbeddingsExtractor.isReady()
 //            val (embedding, t2) = measureTimedValue { insightFaceEmbeddingsExtractor.extractEmbedding(croppedBitmap)}
@@ -237,4 +249,90 @@ class ImageVectorUseCase(
     fun removeImages(personID: Long) {
         imagesVectorDB.removeFaceRecordsWithPersonID(personID)
     }
+
+//    private fun isFrameBlurry(bitmap: Bitmap): Boolean {
+//        val BLUR_THRESHOLD = 100.0 // Adjust this value based on testing
+//        val MIN_IMAGE_SIZE = 200 // Minimum size for blur detection
+//        // Convert bitmap to Mat
+////        val stream = ByteArrayOutputStream()
+////        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+////        val byteArray = stream.toByteArray()
+////        val matOfByte = MatOfByte(*byteArray)
+////        val mat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_GRAYSCALE)
+//
+//        val mat = Mat()
+//        Utils.bitmapToMat(bitmap, mat)
+//        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY)
+//
+//        // Resize if image is too large
+//        if (mat.width() > MIN_IMAGE_SIZE || mat.height() > MIN_IMAGE_SIZE) {
+//            val scale = MIN_IMAGE_SIZE.toDouble() / mat.width().coerceAtLeast(mat.height())
+//            Imgproc.resize(
+//                mat,
+//                mat,
+//                org.opencv.core.Size(
+//                    mat.width() * scale,
+//                    mat.height() * scale
+//                )
+//            )
+//        }
+//
+//        // Calculate Laplacian variance
+//        val destination = MatOfDouble()
+//        Imgproc.Laplacian(mat, destination,  org.opencv.core.CvType.CV_64F)
+//        val median = MatOfDouble()
+//        Core.meanStdDev(destination, median, MatOfDouble())
+//        val variance = Math.pow(median.get(0, 0)[0], 2.0)
+//
+//        // Clean up
+//        mat.release()
+//        destination.release()
+//        median.release()
+//        Log.d("ImageVectorUseCase", "Variance: $variance")
+//
+//        return variance < BLUR_THRESHOLD
+//    }
+
+
+    private fun isFrameBlurry(bitmap: Bitmap): Boolean {
+        val BLUR_THRESHOLD = 800.0    // Tune this by experiment
+        val MIN_IMAGE_SIZE = 200      // Downscale limit for speed
+
+        // 1. Convert Bitmap → Mat (RGBA) → Gray
+        val mat = Mat()
+        Utils.bitmapToMat(bitmap, mat)
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY)
+
+        // 2. Downscale if larger than MIN_IMAGE_SIZE (for speed)
+        val maxDim = mat.width().coerceAtLeast(mat.height())
+        if (maxDim > MIN_IMAGE_SIZE) {
+            val scale = MIN_IMAGE_SIZE.toDouble() / maxDim
+            val newW = (mat.width() * scale).toInt()
+            val newH = (mat.height() * scale).toInt()
+            Imgproc.resize(mat, mat, org.opencv.core.Size(newW.toDouble(), newH.toDouble()))
+        }
+
+        // 3. Compute Laplacian into a Mat (CV_64F for precision)
+        val laplacian = Mat()
+        Imgproc.Laplacian(mat, laplacian, org.opencv.core.CvType.CV_64F)
+
+        // 4. Compute mean and stddev of the Laplacian response
+        val mean = MatOfDouble()
+        val stddev = MatOfDouble()
+        Core.meanStdDev(laplacian, mean, stddev)
+
+        // 5. Laplacian variance = (stddev)^2
+        val sigma = stddev[0, 0][0]         // standard deviation
+        val variance = sigma * sigma
+
+        // 6. Release Mats
+        mat.release()
+        laplacian.release()
+        mean.release()
+        stddev.release()
+
+        Log.d("FaceBlurCheck", "Laplacian variance = $variance")
+        return variance < BLUR_THRESHOLD
+    }
+
 }
