@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
+import android.util.Log
 import androidx.core.graphics.get
 import androidx.core.graphics.set
 import kotlinx.coroutines.Dispatchers
@@ -127,6 +128,8 @@ class FaceSpoofDetector(context: Context, useGpu: Boolean = false, useXNNPack: B
             val label = output.indexOf(output.max())
             val iSpoof = label != 1
             val score = output[label] / 2f
+//            Log.d("Spoof",label.toString())
+            Log.d("Spoof", "Label: ${label} ANf Score ${score}")
 
             return@withContext FaceSpoofResult(isSpoof = iSpoof, score = score, timeMillis = time)
         }

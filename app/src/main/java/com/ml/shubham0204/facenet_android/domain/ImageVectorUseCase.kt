@@ -105,10 +105,10 @@ class ImageVectorUseCase(
             // Get the embedding for the cropped face (query embedding)
             val (croppedBitmap, boundingBox,trackingId) = result
             val blurry = isFrameBlurry(croppedBitmap)
-//            if (blurry) {
-//                faceRecognitionResults.add(FaceRecognitionResult("Blurry", boundingBox))
-//                continue
-//            }
+            if (blurry) {
+                faceRecognitionResults.add(FaceRecognitionResult("Blurry", boundingBox))
+                continue
+            }
             val (embedding, t2) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
 //            insightFaceEmbeddingsExtractor.isReady()
 //            val (embedding, t2) = measureTimedValue { insightFaceEmbeddingsExtractor.extractEmbedding(croppedBitmap)}
@@ -295,7 +295,7 @@ class ImageVectorUseCase(
 
 
     private fun isFrameBlurry(bitmap: Bitmap): Boolean {
-        val BLUR_THRESHOLD = 800.0    // Tune this by experiment
+        val BLUR_THRESHOLD = 400.0    // Tune this by experiment
         val MIN_IMAGE_SIZE = 200      // Downscale limit for speed
 
         // 1. Convert Bitmap → Mat (RGBA) → Gray

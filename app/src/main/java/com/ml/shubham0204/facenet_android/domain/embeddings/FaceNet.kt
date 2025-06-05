@@ -82,7 +82,7 @@ class FaceNet(context: Context, useGpu: Boolean = true, useXNNPack: Boolean = tr
         withContext(Dispatchers.Default) {
             val embeddings = runFaceNet(convertBitmapToBuffer(image))[0]
             val embeddings_norm = l2Normalize(embeddings)
-            Log.d("FaceNet", embeddings_norm.max().toString() + " " + embeddings_norm.min().toString())
+//            Log.d("FaceNet", embeddings_norm.max().toString() + " " + embeddings_norm.min().toString())
             return@withContext  embeddings_norm// Add L2 normalization
 
 //            return@withContext runFaceNet(convertBitmapToBuffer(image))[0]
